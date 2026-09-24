@@ -58,6 +58,12 @@ final class MeSessionStore {
 
     /// Partner's latest mood (Partner tab). Separate from your Me history.
     var partnerCurrentMood: SharedMood
+    /// Partner mood shares for the week strip (includes current).
+    var partnerHistory: [SharedMood]
+    var expandedPartnerDayKey: String?
+    /// Demo default paired so Partner mood UI is reachable (Figma invite modal still supported).
+    var isPaired: Bool = true
+    var inviteCode: String = "BESIDE-4K2M"
     /// Your emoji reaction to the partner's mood.
     var myReactionToPartner: String?
     /// Your short note about the partner's mood.
@@ -65,11 +71,26 @@ final class MeSessionStore {
 
     init(history: [SharedMood]? = nil, partnerCurrentMood: SharedMood? = nil) {
         self.history = history ?? Self.makeSeedHistory()
-        self.partnerCurrentMood = partnerCurrentMood ?? Self.makeSeedPartnerMood()
+        let partnerMood = partnerCurrentMood ?? Self.makeSeedPartnerMood()
+        self.partnerCurrentMood = partnerMood
+        self.partnerHistory = Self.makeSeedPartnerHistory(current: partnerMood)
         if let response = Self.seedMyResponseToPartner {
             self.myReactionToPartner = response.reaction
             self.myNoteToPartner = response.note
         }
+    }
+
+    func togglePartnerDay(_ key: String, hasEntries: Bool) {
+        guard isPaired, hasEntries else { return }
+        expandedPartnerDayKey = expandedPartnerDayKey == key ? nil : key
+    }
+
+    func completePairing() {
+        isPaired = true
+    }
+
+    func partnerWeekBuckets(now: Date = Date()) -> [DayBucket] {
+        weekBuckets(from: partnerHistory, now: now)
     }
 
     var hasResponseToPartner: Bool {
@@ -77,8 +98,9 @@ final class MeSessionStore {
             || !(myNoteToPartner?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
     }
 
-    /// You react + optionally note the partner's mood (Partner tab).
+    /// You react + optionally note the partner's mood (Partner tab). Once per current partner mood.
     func respondToPartnerMood(reaction: String, note: String?) {
+        guard myReactionToPartner == nil else { return }
         let trimmedNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
         let limitedNote: String?
         if let trimmedNote, !trimmedNote.isEmpty {
@@ -88,6 +110,17 @@ final class MeSessionStore {
         }
         myReactionToPartner = reaction
         myNoteToPartner = limitedNote
+    }
+
+    /// New partner share resets your reaction slot for that mood.
+    func replacePartnerCurrentMood(_ mood: SharedMood) {
+        partnerCurrentMood = mood
+        if !partnerHistory.contains(where: { $0.id == mood.id }) {
+            partnerHistory.append(mood)
+        }
+        myReactionToPartner = nil
+        myNoteToPartner = nil
+        expandedPartnerDayKey = nil
     }
 
     /// Incoming: partner reacts to your latest Me share.
@@ -227,6 +260,10 @@ final class MeSessionStore {
     }
 
     func weekBuckets(now: Date = Date()) -> [DayBucket] {
+        weekBuckets(from: history, now: now)
+    }
+
+    private func weekBuckets(from entries: [SharedMood], now: Date) -> [DayBucket] {
         let calendar = Calendar.current
         let todayStart = calendar.startOfDay(for: now)
         var buckets: [DayBucket] = []
@@ -244,10 +281,10 @@ final class MeSessionStore {
                 formatter.dateFormat = "EEE"
                 label = formatter.string(from: day)
             }
-            let entries = history
+            let dayEntries = entries
                 .filter { calendar.isDate($0.timestamp, inSameDayAs: day) }
                 .sorted { $0.timestamp < $1.timestamp }
-            buckets.append(DayBucket(id: key, label: label, isToday: isToday, entries: entries))
+            buckets.append(DayBucket(id: key, label: label, isToday: isToday, entries: dayEntries))
         }
         return buckets
     }
@@ -257,17 +294,68 @@ final class MeSessionStore {
         return String(format: "%04d-%02d-%02d", comps.year ?? 0, comps.month ?? 0, comps.day ?? 0)
     }
 
+    /// Figma Make Partner hero defaults to stressed.
     nonisolated static func makeSeedPartnerMood(now: Date = Date()) -> SharedMood {
         let calendar = Calendar.current
-        var date = calendar.date(bySettingHour: 9, minute: 40, second: 0, of: now) ?? now
-        if calendar.component(.hour, from: now) < 9 {
-            date = calendar.date(byAdding: .day, value: -1, to: date) ?? date
-        }
+        let date = calendar.date(byAdding: .minute, value: -45, to: now) ?? now
         return SharedMood(
-            moodID: "joy",
-            wish: "Let's celebrate small wins together.",
+            moodID: "stressed",
+            wish: "Just listen without judging.",
             timestamp: date
         )
+    }
+
+    /// Partner week history matching `PartnerScreen.tsx` past days + today earlier entries + current.
+    nonisolated static func makeSeedPartnerHistory(current: SharedMood, now: Date = Date()) -> [SharedMood] {
+        let calendar = Calendar.current
+        let past: [(daysAgo: Int, moodID: String, wishIndex: Int, hour: Int, minute: Int)] = [
+            (6, "calm", 0, 9, 30),
+            (6, "stressed", 0, 18, 15),
+            (5, "stressed", 2, 11, 0),
+            (4, "sad", 0, 8, 45),
+            (4, "calm", 2, 15, 20),
+            (4, "stressed", 0, 18, 0),
+            (4, "love", 2, 21, 0),
+            (3, "calm", 1, 10, 0),
+            (2, "love", 0, 19, 30),
+            (1, "joy", 2, 12, 0),
+            (1, "joy", 1, 17, 45),
+        ]
+
+        let todayEarlier: [(moodID: String, wishIndex: Int, hour: Int, minute: Int)] = [
+            ("calm", 0, 8, 15),
+            ("joy", 2, 10, 40),
+            ("love", 2, 12, 20),
+            ("sad", 2, 14, 5),
+            ("exhausted", 1, 16, 10),
+        ]
+
+        func wish(_ moodID: String, index: Int) -> String {
+            let list = MoodCatalog.wishes(for: moodID)
+            guard !list.isEmpty else { return "…" }
+            return list[index % list.count]
+        }
+
+        var entries: [SharedMood] = past.compactMap { seed in
+            guard MoodCatalog.mood(id: seed.moodID) != nil else { return nil }
+            var date = calendar.date(byAdding: .day, value: -seed.daysAgo, to: now) ?? now
+            date = calendar.date(bySettingHour: seed.hour, minute: seed.minute, second: 0, of: date) ?? date
+            return SharedMood(moodID: seed.moodID, wish: wish(seed.moodID, index: seed.wishIndex), timestamp: date)
+        }
+
+        for seed in todayEarlier {
+            guard MoodCatalog.mood(id: seed.moodID) != nil else { continue }
+            var date = calendar.date(bySettingHour: seed.hour, minute: seed.minute, second: 0, of: now) ?? now
+            if date > current.timestamp {
+                date = calendar.date(byAdding: .hour, value: -1, to: current.timestamp) ?? current.timestamp
+            }
+            entries.append(
+                SharedMood(moodID: seed.moodID, wish: wish(seed.moodID, index: seed.wishIndex), timestamp: date)
+            )
+        }
+
+        entries.append(current)
+        return entries.sorted { $0.timestamp < $1.timestamp }
     }
 
     /// Demo: you already left a light response on partner's mood (optional empty for first-run feel).

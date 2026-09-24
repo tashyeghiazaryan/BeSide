@@ -76,25 +76,79 @@ enum WishTextRules {
     }
 }
 
-/// Short optional note from the partner with a mood reaction (same charset as custom wish).
+/// Optional note with a mood reaction on Partner (own charset; max 60).
 enum PartnerNoteRules {
     static let maxLength = 60
+
+    enum ValidationError: Equatable {
+        case whitespaceOnly
+        case invalidCharacters
+
+        var inlineMessage: String {
+            switch self {
+            case .whitespaceOnly:
+                "Note can’t be only spaces. Add text or leave the field empty."
+            case .invalidCharacters:
+                "Only Latin letters, numbers, punctuation (.,!?:-), spaces, and emoji. Max 60 characters."
+            }
+        }
+    }
 
     static func limitLength(_ string: String) -> String {
         String(string.prefix(maxLength))
     }
 
-    static func containsDisallowed(_ string: String) -> Bool {
-        let normalized = WishTextRules.normalizeInput(string)
-        return normalized.count > maxLength || normalized.contains { !WishTextRules.isAllowed($0) }
+    static func normalizeInput(_ string: String) -> String {
+        WishTextRules.normalizeInput(string)
+    }
+
+    static func isAllowed(_ character: Character) -> Bool {
+        character.unicodeScalars.allSatisfy(isAllowedScalar)
+    }
+
+    /// Empty field is OK (emoji-only send). Non-empty must be valid text, not spaces-only.
+    static func validate(_ string: String) -> ValidationError? {
+        let normalized = normalizeInput(string)
+        let trimmed = normalized.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if trimmed.isEmpty {
+            // Empty field → OK (emoji-only). Spaces/newlines only → alert.
+            return normalized.isEmpty ? nil : .whitespaceOnly
+        }
+
+        guard trimmed.count <= maxLength else { return .invalidCharacters }
+        if trimmed.contains(where: { !isAllowed($0) }) {
+            return .invalidCharacters
+        }
+        return nil
     }
 
     static func isValidOptionalNote(_ string: String) -> Bool {
-        let trimmed = WishTextRules.normalizeInput(string)
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty { return true }
-        guard trimmed.count <= maxLength else { return false }
-        return trimmed.allSatisfy(WishTextRules.isAllowed)
+        validate(string) == nil
+    }
+
+    private static func isAllowedScalar(_ scalar: Unicode.Scalar) -> Bool {
+        let value = scalar.value
+        // A–Z a–z
+        if (0x41...0x5A).contains(value) || (0x61...0x7A).contains(value) { return true }
+        // 0–9
+        if (0x30...0x39).contains(value) { return true }
+        // space / NBSP
+        if value == 0x20 || value == 0xA0 { return true }
+        // . , ! ? : -
+        if value == 0x2E || value == 0x2C || value == 0x21 || value == 0x3F
+            || value == 0x3A || value == 0x2D
+        {
+            return true
+        }
+        // Emoji sequences: ZWJ, VS16, skin tones
+        if value == 0x200D || value == 0xFE0F || (0x1F3FB...0x1F3FF).contains(value) {
+            return true
+        }
+        if value > 0x7F, scalar.properties.isEmoji || scalar.properties.isEmojiModifier {
+            return true
+        }
+        return false
     }
 }
 

@@ -1,21 +1,6 @@
-# ios-app-shell Specification
+# Spec Delta
 
-## Purpose
-
-Gives the native BeSide app a signed-in navigation shell of five empty tabs so later screens can attach to a stable structure without auth, data, or feature logic.
-
-## Requirements
-
-### Requirement: App opens on the five-tab shell
-The app SHALL open directly into a tab shell with exactly five tabs, in this order: Me, Partner, Us, Connection, More. The app MUST NOT present an authentication, onboarding, or pairing gate before the shell. The Me tab MUST be selected on launch.
-
-#### Scenario: Cold launch
-- **WHEN** the user launches the app
-- **THEN** the shell shows the five tabs in the order Me, Partner, Us, Connection, More, and the Me tab is selected
-
-#### Scenario: No sign-in step
-- **WHEN** the user launches the app with no account and no stored session
-- **THEN** the shell is shown without asking the user to sign in, pair, or complete onboarding
+## MODIFIED Requirements
 
 ### Requirement: Each tab shows only its placeholder
 Selecting Us, Connection, or More SHALL show that tab's placeholder and hide the other tabs' content. Each of those placeholders MUST identify its tab by the same name as the tab (Us, Connection, or More). A placeholder on those tabs MUST NOT offer mood sharing, partner reactions, couple content, connection activities, profile editing, settings, or any other feature action. Selecting Me SHALL show the Me screen content defined by the `me-screen` capability. Selecting Partner SHALL show the Partner screen content defined by the `partner-screen` capability instead of a named-only placeholder.
@@ -35,14 +20,3 @@ Selecting Us, Connection, or More SHALL show that tab's placeholder and hide the
 #### Scenario: Partner is not a blank placeholder
 - **WHEN** the user selects the Partner tab
 - **THEN** the Partner screen content is shown rather than a screen that only displays the word Partner
-
-### Requirement: Shell does not depend on backend or stored user data
-The shell MUST be usable with no network, no account, and no previously stored user content. The app MUST NOT show the template item list (timestamps with add and delete) in place of the shell.
-
-#### Scenario: Offline launch
-- **WHEN** the user launches the app with no network connection
-- **THEN** all five tabs are still available and each shows its placeholder
-
-#### Scenario: Template list is gone
-- **WHEN** the user launches the app
-- **THEN** the screen does not list stored items and does not offer add or delete for those items

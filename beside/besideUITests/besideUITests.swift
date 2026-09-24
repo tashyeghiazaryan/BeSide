@@ -83,6 +83,27 @@ final class besideUITests: XCTestCase {
     }
 
     @MainActor
+    func testPartnerShowsFigmaBlocks() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        screen(app, "tab.partner").tap()
+        XCTAssertTrue(screen(app, "screen.partner").waitForExistence(timeout: 5))
+        XCTAssertTrue(screen(app, "partner.current.mood").waitForExistence(timeout: 3))
+        XCTAssertTrue(screen(app, "partner.care.suggestions").exists)
+        XCTAssertTrue(screen(app, "partner.week.strip").exists)
+        XCTAssertTrue(screen(app, "partner.reaction.open").exists)
+        XCTAssertTrue(
+            app.staticTexts["Your partner's mood"].waitForExistence(timeout: 2)
+                || screen(app, "screen.partner").staticTexts["Your partner's mood"].exists
+        )
+        XCTAssertTrue(
+            app.staticTexts["Small ways to show you care"].exists
+                || screen(app, "partner.care.suggestions").exists
+        )
+    }
+
+    @MainActor
     func testLaunchPerformance() throws {
         measure(metrics: [XCTApplicationLaunchMetric()]) {
             XCUIApplication().launch()

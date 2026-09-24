@@ -2,6 +2,8 @@ import SwiftUI
 
 /// Week strip matching the Me screenshot: tap a day → in-card detail with tinted mood rows.
 struct WeekMoodStrip: View {
+    var title: String = "My mood this week"
+    var accessibilityID: String = "week.mood.strip"
     let buckets: [MeSessionStore.DayBucket]
     let expandedDayKey: String?
     let onTapDay: (MeSessionStore.DayBucket) -> Void
@@ -21,7 +23,7 @@ struct WeekMoodStrip: View {
                     Image(systemName: "calendar")
                         .font(.system(size: 14))
                         .foregroundStyle(Color.gray.opacity(0.55))
-                    Text("My mood this week")
+                    Text(title)
                         .font(.system(size: 12, weight: .light))
                         .tracking(1.2)
                         .textCase(.uppercase)
@@ -49,7 +51,7 @@ struct WeekMoodStrip: View {
         }
         .animation(.easeOut(duration: 0.22), value: expandedDayKey)
         .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("week.mood.strip")
+        .accessibilityIdentifier(accessibilityID)
     }
 
     @ViewBuilder
