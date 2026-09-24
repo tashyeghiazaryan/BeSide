@@ -104,7 +104,30 @@ final class besideUITests: XCTestCase {
     }
 
     @MainActor
-    func testLaunchPerformance() throws {
+    func testUsShowsHomeShell() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        screen(app, "tab.us").tap()
+        XCTAssertTrue(screen(app, "screen.us").waitForExistence(timeout: 5))
+        XCTAssertTrue(screen(app, "us.hero").waitForExistence(timeout: 3))
+        XCTAssertTrue(screen(app, "us.daily.progress").exists)
+        XCTAssertTrue(screen(app, "us.level").exists)
+        XCTAssertTrue(screen(app, "us.entry.tiles").exists)
+        XCTAssertTrue(screen(app, "us.memories").exists)
+        XCTAssertTrue(
+            app.staticTexts["Anna & Alex"].waitForExistence(timeout: 2)
+                || screen(app, "us.couple.names").exists
+        )
+        XCTAssertTrue(
+            app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'together for'")).firstMatch.exists
+                || screen(app, "us.time.together").exists
+        )
+        // Feature flows are stubs in us-shell — tiles present, no crash on tap.
+        screen(app, "us.tile.dates").tap()
+        XCTAssertTrue(screen(app, "us.hero").exists)
+    }
+
         measure(metrics: [XCTApplicationLaunchMetric()]) {
             XCUIApplication().launch()
         }

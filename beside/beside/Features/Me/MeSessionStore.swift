@@ -69,6 +69,63 @@ final class MeSessionStore {
     /// Your short note about the partner's mood.
     var myNoteToPartner: String?
 
+    // MARK: - Us home (local seeds; no network)
+
+    /// Relationship start for “together for …” (Figma Make default: 14 Mar 2022).
+    var relationshipStartDate: Date
+    /// Long-term connection level 1…30 (demo default 7).
+    var usLongTermLevel: Int
+    /// Points toward the next level (demo default 420).
+    var usLongTermPoints: Int
+    /// Current daily streak days (demo default 3).
+    var usStreakDays: Int
+    /// Couples prompt completion today (you / partner) — demo both incomplete.
+    var meActivityDoneToday: Bool
+    var partnerActivityDoneToday: Bool
+    /// Nearest important-date preview for Us home tile (stub until important-dates slice).
+    var usNearestImportantDateTitle: String
+    var usNearestImportantDate: Date
+    var usNearestImportantDaysUntil: Int
+
+    /// You shared a mood today (Me history).
+    var meMoodSharedToday: Bool {
+        let calendar = Calendar.current
+        return history.contains { calendar.isDateInToday($0.timestamp) }
+    }
+
+    /// Partner has a current mood share (Partner hero).
+    var partnerMoodSharedToday: Bool {
+        partnerCurrentMood.mood != nil
+    }
+
+    /// You reacted to partner’s mood.
+    var meCheckedPartnerMoodToday: Bool {
+        myReactionToPartner != nil
+    }
+
+    /// Partner reacted to your latest Me share.
+    var partnerCheckedMyMoodToday: Bool {
+        history.last?.hasPartnerResponse ?? false
+    }
+
+    var usLevelName: String {
+        UsLongTermLevels.name(for: usLongTermLevel)
+    }
+
+    var usPointsToNext: Int {
+        UsLongTermLevels.pointsToNext(for: usLongTermLevel)
+    }
+
+    var usLevelProgressFraction: Double {
+        let goal = usPointsToNext
+        guard goal > 0 else { return 1 }
+        return min(1, max(0, Double(usLongTermPoints) / Double(goal)))
+    }
+
+    var timeTogetherPhrase: String {
+        UsTimeTogether.phrase(since: relationshipStartDate)
+    }
+
     init(history: [SharedMood]? = nil, partnerCurrentMood: SharedMood? = nil) {
         self.history = history ?? Self.makeSeedHistory()
         let partnerMood = partnerCurrentMood ?? Self.makeSeedPartnerMood()
@@ -78,6 +135,31 @@ final class MeSessionStore {
             self.myReactionToPartner = response.reaction
             self.myNoteToPartner = response.note
         }
+        self.relationshipStartDate = Self.makeSeedRelationshipStart()
+        self.usLongTermLevel = 7
+        self.usLongTermPoints = 420
+        self.usStreakDays = 3
+        self.meActivityDoneToday = false
+        self.partnerActivityDoneToday = false
+        let nearest = Self.makeSeedNearestImportantDate()
+        self.usNearestImportantDateTitle = nearest.title
+        self.usNearestImportantDate = nearest.date
+        self.usNearestImportantDaysUntil = nearest.daysUntil
+    }
+
+    nonisolated private static func makeSeedRelationshipStart() -> Date {
+        var comps = DateComponents()
+        comps.year = 2022
+        comps.month = 3
+        comps.day = 14
+        return Calendar(identifier: .gregorian).date(from: comps) ?? Date(timeIntervalSince1970: 1_647_216_000)
+    }
+
+    nonisolated private static func makeSeedNearestImportantDate(now: Date = Date()) -> (title: String, date: Date, daysUntil: Int) {
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: now)
+        let date = calendar.date(byAdding: .day, value: 10, to: start) ?? start
+        return ("Next date together", date, 10)
     }
 
     func togglePartnerDay(_ key: String, hasEntries: Bool) {

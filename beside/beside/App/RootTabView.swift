@@ -30,7 +30,7 @@ struct RootTabView: View {
         case .partner:
             PartnerView(store: meStore)
         case .us:
-            UsView()
+            UsView(store: meStore)
         case .connection:
             ConnectionView()
         case .more:
