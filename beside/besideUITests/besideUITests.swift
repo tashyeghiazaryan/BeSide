@@ -1,0 +1,105 @@
+import XCTest
+
+final class besideUITests: XCTestCase {
+
+    private let tabs: [(title: String, tab: String, screen: String)] = [
+        ("Me", "tab.me", "screen.me"),
+        ("Partner", "tab.partner", "screen.partner"),
+        ("Us", "tab.us", "screen.us"),
+        ("Connection", "tab.connection", "screen.connection"),
+        ("More", "tab.more", "screen.more"),
+    ]
+
+    override func setUpWithError() throws {
+        continueAfterFailure = false
+    }
+
+    override func tearDownWithError() throws {
+    }
+
+    @MainActor
+    func testTabShellSwitchesPlaceholders() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        let tabBar = screen(app, "tab.bar")
+        XCTAssertTrue(tabBar.waitForExistence(timeout: 5))
+
+        for tab in tabs {
+            let button = screen(app, tab.tab)
+            XCTAssertTrue(button.waitForExistence(timeout: 2), "Missing tab button for \(tab.title)")
+            XCTAssertEqual(button.label, tab.title)
+        }
+
+        let me = screen(app, "screen.me")
+        XCTAssertTrue(me.waitForExistence(timeout: 3))
+        assertOnlyScreen(app, "screen.me")
+
+        for tab in [tabs[1], tabs[2], tabs[3], tabs[4], tabs[0]] {
+            screen(app, tab.tab).tap()
+            XCTAssertTrue(
+                screen(app, tab.screen).waitForExistence(timeout: 5),
+                "Expected \(tab.screen) after tapping \(tab.title)"
+            )
+            assertOnlyScreen(app, tab.screen)
+        }
+    }
+
+    @MainActor
+    func testMeMoodShareUpdatesCurrentPanel() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        XCTAssertTrue(screen(app, "screen.me").waitForExistence(timeout: 5))
+        XCTAssertTrue(screen(app, "week.mood.strip").waitForExistence(timeout: 2))
+        XCTAssertTrue(screen(app, "current.mood.panel").exists)
+
+        let calm = app.descendants(matching: .any)["mood.calm"]
+        XCTAssertTrue(calm.waitForExistence(timeout: 2))
+        calm.tap()
+
+        let wish = app.descendants(matching: .any)["wish.calm.0"]
+        XCTAssertTrue(wish.waitForExistence(timeout: 2))
+        wish.tap()
+
+        let share = app.descendants(matching: .any)["share.button"]
+        XCTAssertTrue(share.waitForExistence(timeout: 2))
+        share.tap()
+
+        let sent = app.descendants(matching: .any)["share.sent"]
+        XCTAssertTrue(sent.waitForExistence(timeout: 5))
+
+        let panel = screen(app, "current.mood.panel")
+        XCTAssertTrue(panel.waitForExistence(timeout: 5))
+        XCTAssertTrue(
+            app.staticTexts["Calm & Balanced"].waitForExistence(timeout: 5)
+                || panel.staticTexts["Calm & Balanced"].exists
+        )
+        XCTAssertTrue(
+            app.staticTexts["Let's just sit together in silence."].waitForExistence(timeout: 2)
+                || panel.staticTexts["Let's just sit together in silence."].exists
+        )
+        XCTAssertTrue(screen(app, "week.mood.strip").exists)
+    }
+
+    @MainActor
+    func testLaunchPerformance() throws {
+        measure(metrics: [XCTApplicationLaunchMetric()]) {
+            XCUIApplication().launch()
+        }
+    }
+
+    private func screen(_ app: XCUIApplication, _ identifier: String) -> XCUIElement {
+        app.descendants(matching: .any)[identifier]
+    }
+
+    private func assertOnlyScreen(_ app: XCUIApplication, _ visible: String) {
+        for tab in tabs {
+            if tab.screen == visible {
+                XCTAssertTrue(screen(app, tab.screen).exists)
+            } else {
+                XCTAssertFalse(screen(app, tab.screen).exists)
+            }
+        }
+    }
+}
