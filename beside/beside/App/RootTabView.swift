@@ -15,7 +15,8 @@ struct RootTabView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
-        // Do NOT ignore the keyboard — Me must shrink/scroll so the custom wish field stays visible.
+        // Keep tab layouts fixed — keyboard overlays on top (Me custom wish, Partner note, etc.).
+        .ignoresSafeArea(.keyboard)
         .animation(.easeOut(duration: 0.25), value: isKeyboardVisible)
         .onReceive(KeyboardVisibility.publisher) { visible in
             isKeyboardVisible = visible

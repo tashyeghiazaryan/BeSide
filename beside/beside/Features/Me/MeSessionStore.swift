@@ -82,10 +82,8 @@ final class MeSessionStore {
     /// Couples prompt completion today (you / partner) — demo both incomplete.
     var meActivityDoneToday: Bool
     var partnerActivityDoneToday: Bool
-    /// Nearest important-date preview for Us home tile (stub until important-dates slice).
-    var usNearestImportantDateTitle: String
-    var usNearestImportantDate: Date
-    var usNearestImportantDaysUntil: Int
+    /// Important dates for Us (seeded + user-added this session).
+    var importantDates: [UsImportantDate]
 
     /// You shared a mood today (Me history).
     var meMoodSharedToday: Bool {
@@ -112,6 +110,10 @@ final class MeSessionStore {
         UsLongTermLevels.name(for: usLongTermLevel)
     }
 
+    var usLevelEmoji: String {
+        UsLongTermLevels.emoji(for: usLongTermLevel)
+    }
+
     var usPointsToNext: Int {
         UsLongTermLevels.pointsToNext(for: usLongTermLevel)
     }
@@ -126,6 +128,32 @@ final class MeSessionStore {
         UsTimeTogether.phrase(since: relationshipStartDate)
     }
 
+    /// All dates sorted by soonest occurrence (past dates last by daysUntil).
+    var importantDatesSorted: [UsImportantDate] {
+        importantDates.sorted {
+            UsImportantDates.daysUntil($0.date) < UsImportantDates.daysUntil($1.date)
+        }
+    }
+
+    /// Nearest upcoming (daysUntil >= 0); else soonest overall.
+    var nearestImportantDate: UsImportantDate? {
+        let upcoming = importantDatesSorted.filter { UsImportantDates.daysUntil($0.date) >= 0 }
+        return upcoming.first ?? importantDatesSorted.first
+    }
+
+    var usNearestImportantDateTitle: String {
+        nearestImportantDate?.title ?? ""
+    }
+
+    var usNearestImportantDate: Date {
+        nearestImportantDate?.date ?? Date()
+    }
+
+    var usNearestImportantDaysUntil: Int {
+        guard let nearest = nearestImportantDate else { return 0 }
+        return UsImportantDates.daysUntil(nearest.date)
+    }
+
     init(history: [SharedMood]? = nil, partnerCurrentMood: SharedMood? = nil) {
         self.history = history ?? Self.makeSeedHistory()
         let partnerMood = partnerCurrentMood ?? Self.makeSeedPartnerMood()
@@ -135,16 +163,35 @@ final class MeSessionStore {
             self.myReactionToPartner = response.reaction
             self.myNoteToPartner = response.note
         }
-        self.relationshipStartDate = Self.makeSeedRelationshipStart()
+        let relationshipStart = Self.makeSeedRelationshipStart()
+        self.relationshipStartDate = relationshipStart
         self.usLongTermLevel = 7
         self.usLongTermPoints = 420
         self.usStreakDays = 3
         self.meActivityDoneToday = false
         self.partnerActivityDoneToday = false
-        let nearest = Self.makeSeedNearestImportantDate()
-        self.usNearestImportantDateTitle = nearest.title
-        self.usNearestImportantDate = nearest.date
-        self.usNearestImportantDaysUntil = nearest.daysUntil
+        self.importantDates = UsImportantDates.makeSeedDates(
+            relationshipStart: relationshipStart,
+            partnerName: "Alex"
+        )
+    }
+
+    /// Add a custom important date for this session. Returns false if title empty.
+    @discardableResult
+    func addImportantDate(title: String, date: Date) -> Bool {
+        let clean = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return false }
+        let calendar = Calendar.current
+        let day = calendar.startOfDay(for: date)
+        let entry = UsImportantDate(
+            id: "custom-\(UUID().uuidString)",
+            title: clean,
+            date: day,
+            kind: .custom,
+            accentHex: 0x22C55E
+        )
+        importantDates.append(entry)
+        return true
     }
 
     nonisolated private static func makeSeedRelationshipStart() -> Date {
@@ -153,13 +200,6 @@ final class MeSessionStore {
         comps.month = 3
         comps.day = 14
         return Calendar(identifier: .gregorian).date(from: comps) ?? Date(timeIntervalSince1970: 1_647_216_000)
-    }
-
-    nonisolated private static func makeSeedNearestImportantDate(now: Date = Date()) -> (title: String, date: Date, daysUntil: Int) {
-        let calendar = Calendar.current
-        let start = calendar.startOfDay(for: now)
-        let date = calendar.date(byAdding: .day, value: 10, to: start) ?? start
-        return ("Next date together", date, 10)
     }
 
     func togglePartnerDay(_ key: String, hasEntries: Bool) {

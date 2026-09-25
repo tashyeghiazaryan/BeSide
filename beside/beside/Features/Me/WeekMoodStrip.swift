@@ -7,6 +7,8 @@ struct WeekMoodStrip: View {
     let buckets: [MeSessionStore.DayBucket]
     let expandedDayKey: String?
     let onTapDay: (MeSessionStore.DayBucket) -> Void
+    /// Tap on panel chrome / empty space (not a day control) dismisses the detail.
+    var onTapOutsideDetail: (() -> Void)? = nil
 
     private var expandedBucket: MeSessionStore.DayBucket? {
         guard let expandedDayKey else { return nil }
@@ -29,6 +31,11 @@ struct WeekMoodStrip: View {
                         .textCase(.uppercase)
                         .foregroundStyle(Color.black.opacity(0.28))
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if expandedDayKey != nil { onTapOutsideDetail?() }
+                }
 
                 HStack(alignment: .top, spacing: 0) {
                     ForEach(buckets) { bucket in
@@ -48,6 +55,13 @@ struct WeekMoodStrip: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 14)
+            .background {
+                if expandedDayKey != nil {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture { onTapOutsideDetail?() }
+                }
+            }
         }
         .animation(.easeOut(duration: 0.22), value: expandedDayKey)
         .accessibilityElement(children: .contain)

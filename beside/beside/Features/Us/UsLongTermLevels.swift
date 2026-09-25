@@ -46,6 +46,10 @@ enum UsLongTermLevels {
         row(for: level)?.name ?? "First Spark"
     }
 
+    static func emoji(for level: Int) -> String {
+        row(for: level)?.emoji ?? "✨"
+    }
+
     static func pointsToNext(for level: Int) -> Int {
         row(for: level)?.pointsToNext ?? 150
     }

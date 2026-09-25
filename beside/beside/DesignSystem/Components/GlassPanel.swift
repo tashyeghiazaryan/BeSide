@@ -31,5 +31,7 @@ struct GlassPanel<Content: View>: View {
             }
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .shadow(color: Color.black.opacity(0.07), radius: 10, y: 4)
+            // BeSide glass is designed for light materials even if the device is in dark mode.
+            .environment(\.colorScheme, .light)
     }
 }

@@ -52,25 +52,25 @@ struct CurrentMoodPanel: View {
                                 .blur(radius: 8)
                                 .opacity(0.5)
                                 .clipShape(Circle())
-                            MoodIcon(kind: mood.icon, size: 24)
+                            MoodIcon(kind: mood.icon, size: 26)
                                 .foregroundStyle(.white)
                         }
-                        .frame(width: 48, height: 48)
+                        .frame(width: 52, height: 52)
                         .overlay(Circle().stroke(Color.white.opacity(0.5), lineWidth: 1))
 
-                        VStack(alignment: .leading, spacing: 4) {
+                        VStack(alignment: .leading, spacing: 5) {
                             Text(mood.name)
-                                .font(.system(size: 16, weight: .regular))
+                                .font(.system(size: 18, weight: .regular))
                                 .foregroundStyle(Color.black.opacity(0.75))
                             Text(shared.wish)
-                                .font(.system(size: 14, weight: .light))
+                                .font(.system(size: 16, weight: .light))
                                 .foregroundStyle(Color.gray)
                                 .lineLimit(2)
                             HStack(spacing: 4) {
                                 Image(systemName: "clock")
-                                    .font(.system(size: 11))
+                                    .font(.system(size: 12))
                                 Text(Self.format(shared.timestamp))
-                                    .font(.system(size: 11, weight: .light))
+                                    .font(.system(size: 13, weight: .light))
                             }
                             .foregroundStyle(Color.gray.opacity(0.7))
 
@@ -82,16 +82,16 @@ struct CurrentMoodPanel: View {
                         Spacer(minLength: 0)
 
                         Image(systemName: "chevron.right")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.system(size: 12, weight: .semibold))
                             .foregroundStyle(BeSideColor.textMutedSoft)
                             .padding(.top, 4)
                     }
                     .padding(.horizontal, 16)
-                    .padding(.vertical, 14)
+                    .padding(.vertical, 15)
                     .contentShape(Rectangle())
                 } else {
                     Text("Select your mood below to share it with your partner")
-                        .font(.system(size: 15, weight: .light))
+                        .font(.system(size: 16, weight: .light))
                         .foregroundStyle(Color.gray)
                         .multilineTextAlignment(.center)
                         .frame(maxWidth: .infinity)
@@ -108,14 +108,14 @@ struct CurrentMoodPanel: View {
             if let reaction = shared.partnerReaction {
                 HStack(spacing: 6) {
                     Text(reaction)
-                        .font(.system(size: 16))
+                        .font(.system(size: 18))
                         .accessibilityIdentifier("partner.reaction.emoji")
                     Text("\(partnerName) reacted")
-                        .font(.system(size: 11, weight: .light))
+                        .font(.system(size: 13, weight: .light))
                         .foregroundStyle(BeSideColor.textMutedSoft)
                 }
                 .padding(.horizontal, 12)
-                .padding(.vertical, 6)
+                .padding(.vertical, 7)
                 .background {
                     Capsule(style: .continuous)
                         .fill(
@@ -141,7 +141,7 @@ struct CurrentMoodPanel: View {
                !note.isEmpty
             {
                 Text(note)
-                    .font(.system(size: 13, weight: .light))
+                    .font(.system(size: 15, weight: .light))
                     .foregroundStyle(BeSideColor.wishTextIdle)
                     .fixedSize(horizontal: false, vertical: true)
                     .accessibilityIdentifier("partner.reaction.note")

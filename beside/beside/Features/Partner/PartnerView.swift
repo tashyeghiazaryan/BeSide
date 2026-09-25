@@ -10,16 +10,28 @@ struct PartnerView: View {
     @State private var justSentReaction = false
     @State private var noteText = ""
     @State private var fieldError: String?
-    @State private var keyboardHeight: CGFloat = 0
     @FocusState private var noteFocused: Bool
 
     private let reactionEmojis = ["❤️", "🤗", "😊", "👏", "💪", "🔥", "😍", "💐"]
 
     private enum ScrollID {
-        static let noteField = "partner.note.block"
-        static let composerBottom = "partner.composer.bottom"
         static let week = "partner.week"
         static let weekBottom = "partner.weekBottom"
+    }
+
+    private var isWeekDetailOpen: Bool { store.expandedPartnerDayKey != nil }
+
+    private func dismissWeekDetail() {
+        guard isWeekDetailOpen else { return }
+        withAnimation(.easeOut(duration: 0.22)) {
+            store.expandedPartnerDayKey = nil
+        }
+    }
+
+    private var weekDetailDismissOverlay: some View {
+        Color.clear
+            .contentShape(Rectangle())
+            .onTapGesture(perform: dismissWeekDetail)
     }
 
     var body: some View {
@@ -38,6 +50,7 @@ struct PartnerView: View {
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .ignoresSafeArea(.keyboard)
             .toolbar {
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
@@ -54,6 +67,7 @@ struct PartnerView: View {
             }
             .onChange(of: store.partnerCurrentMood.id) { _, _ in
                 dismissKeyboard()
+                dismissWeekDetail()
                 isComposing = false
                 justSentReaction = false
                 fieldError = nil
@@ -62,20 +76,13 @@ struct PartnerView: View {
             }
             .onChange(of: isComposing) { _, composing in
                 if composing {
-                    Task { @MainActor in
-                        try? await Task.sleep(for: .milliseconds(300))
-                        guard isComposing else { return }
-                        noteFocused = true
-                    }
+                    dismissWeekDetail()
                 } else {
                     noteFocused = false
                 }
             }
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { note in
-                updateKeyboardHeight(from: note)
-            }
-            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-                keyboardHeight = 0
+            .onChange(of: noteFocused) { _, focused in
+                if focused { dismissWeekDetail() }
             }
         }
     }
@@ -84,6 +91,7 @@ struct PartnerView: View {
         ZStack {
             BeSideBackground.softCanvas
                 .ignoresSafeArea()
+                .onTapGesture(perform: dismissWeekDetail)
 
             if let mood = store.partnerCurrentMood.mood {
                 BeSideBackground.moodAmbient(
@@ -91,47 +99,59 @@ struct PartnerView: View {
                     gradientColors: mood.gradientColors
                 )
                 .ignoresSafeArea()
+                .onTapGesture(perform: dismissWeekDetail)
             } else {
                 BeSideBackground.defaultAmbientBlobs()
                     .ignoresSafeArea()
+                    .onTapGesture(perform: dismissWeekDetail)
             }
 
             ScrollViewReader { proxy in
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 0) {
-                        Color.clear.frame(height: 16)
+                        VStack(spacing: 0) {
+                            Color.clear.frame(height: 16)
 
-                        Text("Your partner's mood")
-                            .font(.system(size: 28, weight: .ultraLight))
-                            .tracking(0.4)
-                            .foregroundStyle(BeSideColor.textPrimary)
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: .infinity)
-                            .padding(.bottom, 8)
+                            Text("Your partner's mood")
+                                .font(.system(size: 30, weight: .ultraLight))
+                                .tracking(0.4)
+                                .foregroundStyle(BeSideColor.textPrimary)
+                                .multilineTextAlignment(.center)
+                                .frame(maxWidth: .infinity)
+                                .padding(.bottom, 8)
 
-                        if let mood = store.partnerCurrentMood.mood {
-                            Text(
-                                "\(store.partnerDisplayName) feels \(PartnerCareSuggestions.feelingPhrase(for: mood.id)) today"
-                            )
-                            .font(.system(size: 15, weight: .light))
-                            .foregroundStyle(mood.color.opacity(0.8))
-                            .multilineTextAlignment(.center)
-                            .frame(maxWidth: .infinity)
-                            .padding(.bottom, 22)
+                            if let mood = store.partnerCurrentMood.mood {
+                                Text(
+                                    "\(store.partnerDisplayName) feels \(PartnerCareSuggestions.feelingPhrase(for: mood.id)) today"
+                                )
+                                .font(.system(size: 16, weight: .light))
+                                .foregroundStyle(mood.color.opacity(0.8))
+                                .multilineTextAlignment(.center)
+                                .frame(maxWidth: .infinity)
+                                .padding(.bottom, 22)
 
-                            heroCard(mood: mood)
+                                heroCard(mood: mood)
+                                    .padding(.bottom, 28)
+
+                                careSection(moodID: mood.id)
+                                    .padding(.bottom, 24)
+                            } else {
+                                GlassPanel {
+                                    Text("\(store.partnerDisplayName) hasn’t shared a mood yet")
+                                        .font(.system(size: 16, weight: .light))
+                                        .foregroundStyle(BeSideColor.textMuted)
+                                        .multilineTextAlignment(.center)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(20)
+                                }
                                 .padding(.bottom, 28)
-
-                            if isComposing {
-                                Color.clear
-                                    .frame(height: max(keyboardHeight, BeSideMetrics.tabBarClearance) + 24)
-                                    .id(ScrollID.composerBottom)
-                                    .allowsHitTesting(false)
                             }
+                        }
+                        .overlay {
+                            if isWeekDetailOpen { weekDetailDismissOverlay }
+                        }
 
-                            careSection(moodID: mood.id)
-                                .padding(.bottom, 24)
-
+                        if store.partnerCurrentMood.mood != nil {
                             WeekMoodStrip(
                                 title: "Mood this week",
                                 accessibilityID: "partner.week.strip",
@@ -140,45 +160,26 @@ struct PartnerView: View {
                                 onTapDay: { bucket in
                                     dismissKeyboard()
                                     store.togglePartnerDay(bucket.id, hasEntries: !bucket.entries.isEmpty)
-                                }
+                                },
+                                onTapOutsideDetail: dismissWeekDetail
                             )
                             .id(ScrollID.week)
                             .padding(.bottom, 28)
+                            .zIndex(isWeekDetailOpen ? 20 : 0)
 
                             Color.clear
                                 .frame(height: store.expandedPartnerDayKey == nil ? 8 : 32)
                                 .id(ScrollID.weekBottom)
                                 .allowsHitTesting(false)
-                        } else {
-                            GlassPanel {
-                                Text("\(store.partnerDisplayName) hasn’t shared a mood yet")
-                                    .font(.system(size: 14, weight: .light))
-                                    .foregroundStyle(BeSideColor.textMuted)
-                                    .multilineTextAlignment(.center)
-                                    .frame(maxWidth: .infinity)
-                                    .padding(20)
-                            }
-                            .padding(.bottom, 28)
                         }
 
                         Color.clear.frame(height: BeSideMetrics.tabBarClearance)
                     }
                     .padding(.horizontal, BeSideMetrics.pageInset)
-                    .padding(.bottom, BeSideMetrics.tabBarClearance + (noteFocused ? keyboardHeight : 0))
+                    .padding(.bottom, BeSideMetrics.tabBarClearance)
                 }
                 .scrollDismissesKeyboard(.interactively)
-                .onChange(of: noteFocused) { _, focused in
-                    guard focused else { return }
-                    scrollNoteAboveKeyboard(proxy: proxy)
-                }
-                .onChange(of: keyboardHeight) { _, height in
-                    guard height > 0, noteFocused else { return }
-                    scrollNoteAboveKeyboard(proxy: proxy)
-                }
-                .onChange(of: fieldError) { _, error in
-                    guard error != nil, noteFocused || isComposing else { return }
-                    scrollNoteAboveKeyboard(proxy: proxy)
-                }
+                .ignoresSafeArea(.keyboard)
                 .onChange(of: store.expandedPartnerDayKey) { _, key in
                     guard key != nil else { return }
                     scrollWeekDropdownIntoView(proxy: proxy)
@@ -209,17 +210,17 @@ struct PartnerView: View {
 
                     VStack(alignment: .leading, spacing: 6) {
                         Text(mood.name)
-                            .font(.system(size: 16, weight: .regular))
+                            .font(.system(size: 18, weight: .regular))
                             .foregroundStyle(BeSideColor.textPrimary)
                         Text("\"\(shared.wish)\"")
-                            .font(.system(size: 14, weight: .light))
+                            .font(.system(size: 16, weight: .light))
                             .foregroundStyle(BeSideColor.textMuted)
                             .fixedSize(horizontal: false, vertical: true)
                         HStack(spacing: 5) {
                             Image(systemName: "clock")
-                                .font(.system(size: 11))
+                                .font(.system(size: 12))
                             Text(Self.formatTimestamp(shared.timestamp))
-                                .font(.system(size: 11, weight: .light))
+                                .font(.system(size: 13, weight: .light))
                         }
                         .foregroundStyle(BeSideColor.textMutedSoft)
                         .padding(.top, 6)
@@ -339,12 +340,12 @@ struct PartnerView: View {
                         Text(reaction)
                             .font(.system(size: 22))
                         Text("Reaction sent!")
-                            .font(.system(size: 12, weight: .light))
+                            .font(.system(size: 14, weight: .light))
                             .foregroundStyle(BeSideColor.textMutedSoft)
                     }
                     if let note = store.myNoteToPartner, !note.isEmpty {
                         Text(note)
-                            .font(.system(size: 12, weight: .light))
+                            .font(.system(size: 14, weight: .light))
                             .foregroundStyle(BeSideColor.wishTextIdle)
                             .multilineTextAlignment(.center)
                     }
@@ -359,14 +360,14 @@ struct PartnerView: View {
                         Text(reaction)
                             .font(.system(size: 18))
                         Text("You reacted")
-                            .font(.system(size: 12, weight: .light))
+                            .font(.system(size: 14, weight: .light))
                             .foregroundStyle(BeSideColor.textMutedSoft)
                     }
                     .frame(maxWidth: .infinity)
 
                     if let note = store.myNoteToPartner, !note.isEmpty {
                         Text(note)
-                            .font(.system(size: 13, weight: .light))
+                            .font(.system(size: 15, weight: .light))
                             .foregroundStyle(BeSideColor.wishTextIdle)
                             .multilineTextAlignment(.center)
                             .frame(maxWidth: .infinity)
@@ -470,40 +471,48 @@ struct PartnerView: View {
                                 )
                         }
                     }
-                    .id(ScrollID.noteField)
-
                     Button(action: {
                         dismissKeyboard()
                         sendReaction()
                     }) {
                         Text("Send reaction")
-                            .font(.system(size: 14, weight: .regular))
-                            .foregroundStyle(BeSideColor.shareIdleText)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(BeSideColor.navyLabel)
                             .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
+                            .padding(.vertical, 14)
                             .background {
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(mood.color.opacity(0.22))
-                                    .overlay {
-                                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                            .stroke(mood.color.opacity(0.28), lineWidth: 1.2)
-                                    }
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(BeSideColor.navyFill)
+                                    .shadow(color: BeSideColor.navyStart.opacity(0.22), radius: 10, y: 4)
                             }
                     }
                     .buttonStyle(.plain)
                     .accessibilityIdentifier("partner.reaction.send")
 
-                    Button("Cancel") {
+                    Button {
                         dismissKeyboard()
                         isComposing = false
                         fieldError = nil
                         draftEmoji = nil
                         noteText = ""
+                    } label: {
+                        Text("Cancel")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Color(hex: 0x1A1A2E).opacity(0.72))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background {
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color.white.opacity(0.55))
+                                    .overlay {
+                                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                            .stroke(Color(hex: 0x1A1A2E).opacity(0.12), lineWidth: 1)
+                                    }
+                                    .shadow(color: Color(hex: 0x1A1A2E).opacity(0.06), radius: 8, y: 2)
+                            }
                     }
-                    .font(.system(size: 10, weight: .light))
-                    .foregroundStyle(Color.gray.opacity(0.4))
-                    .frame(maxWidth: .infinity)
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("partner.reaction.cancel")
                 }
             } else {
                 Button {
@@ -514,26 +523,26 @@ struct PartnerView: View {
                 } label: {
                     HStack(spacing: 8) {
                         Image(systemName: "heart")
-                            .font(.system(size: 13, weight: .light))
-                            .foregroundStyle(Color.gray.opacity(0.55))
+                            .font(.system(size: 14, weight: .regular))
+                            .foregroundStyle(mood.color.opacity(0.85))
                         Text("Send a reaction")
-                            .font(.system(size: 12, weight: .light))
-                            .foregroundStyle(Color.gray.opacity(0.65))
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(BeSideColor.shareIdleText)
                     }
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
+                    .padding(.vertical, 13)
                     .background {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
                             .fill(
                                 LinearGradient(
-                                    colors: [mood.color.opacity(0.12), mood.color.opacity(0.05)],
+                                    colors: [mood.color.opacity(0.22), mood.color.opacity(0.10)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
                             )
                             .overlay {
-                                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                    .stroke(mood.color.opacity(0.15), lineWidth: 1)
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(mood.color.opacity(0.55), lineWidth: 1.5)
                             }
                     }
                 }
@@ -619,28 +628,6 @@ struct PartnerView: View {
             from: nil,
             for: nil
         )
-    }
-
-    private func updateKeyboardHeight(from notification: Notification) {
-        guard
-            let frame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect
-        else {
-            keyboardHeight = 0
-            return
-        }
-        let screenHeight = UIScreen.main.bounds.height
-        let overlap = max(0, screenHeight - frame.origin.y)
-        // Ignore tiny accessory-only frames (hardware keyboard / Done strip).
-        keyboardHeight = overlap > 80 ? overlap : 0
-    }
-
-    private func scrollNoteAboveKeyboard(proxy: ScrollViewProxy) {
-        Task { @MainActor in
-            try? await Task.sleep(for: .milliseconds(50))
-            withAnimation(.easeInOut(duration: 0.3)) {
-                proxy.scrollTo(ScrollID.noteField, anchor: .center)
-            }
-        }
     }
 
     private func scrollWeekDropdownIntoView(proxy: ScrollViewProxy) {
