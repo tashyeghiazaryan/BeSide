@@ -60,7 +60,8 @@ enum UsSharedMemories {
                 photoData: nil,
                 likes: 1,
                 likedByMe: false,
-                addedByUser: true
+                // Partner-shared — appears in home carousel / feed, not in “Moments you added”.
+                addedByUser: false
             ),
             UsSharedMemory(
                 id: "memory-user-demo-1",

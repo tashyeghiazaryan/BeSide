@@ -3,6 +3,8 @@ import SwiftUI
 /// Us home shell — Figma Make `UsScreen` first viewport (feature flows stubbed).
 struct UsView: View {
     @Bindable var store: MeSessionStore
+    /// Switch root tabs (e.g. mood-reaction notification → Me).
+    var onSelectTab: ((AppTab) -> Void)? = nil
     @State private var dailyTipID: DailyTaskID?
     @State private var showLevelTip = false
     @State private var showImportantDatesList = false
@@ -19,6 +21,7 @@ struct UsView: View {
     @State private var viewingMemoryID: String?
     @State private var memoryCarouselIndex = 0
     @State private var memoryCarouselDragged = false
+    @State private var showNotifications = false
 
     private enum DailyTaskID: String, CaseIterable, Identifiable {
         case mood
@@ -108,9 +111,26 @@ struct UsView: View {
             }
             .scrollClipDisabled()
 
-            notificationsBell
-                .padding(.leading, 14)
-                .padding(.top, 4)
+            if !showNotifications {
+                notificationsBell
+                    .padding(.leading, 14)
+                    .padding(.top, 4)
+            }
+
+            if showNotifications {
+                NotificationsPage(
+                    store: store,
+                    onClose: { showNotifications = false },
+                    onOpen: { notification in
+                        openNotification(notification)
+                    }
+                )
+                .transition(.asymmetric(
+                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                    removal: .move(edge: .trailing).combined(with: .opacity)
+                ))
+                .zIndex(100)
+            }
 
             if showImportantDatesList {
                 ImportantDatesListModal(
@@ -308,6 +328,7 @@ struct UsView: View {
         .animation(.spring(response: 0.38, dampingFraction: 0.86), value: showWishlist)
         .animation(.spring(response: 0.38, dampingFraction: 0.86), value: showLoveNotesPage)
         .animation(.spring(response: 0.38, dampingFraction: 0.86), value: showSharedMemoriesPage)
+        .animation(.spring(response: 0.38, dampingFraction: 0.86), value: showNotifications)
         .animation(.easeOut(duration: 0.2), value: loveNoteReading != nil)
         .animation(.easeOut(duration: 0.2), value: viewingMemoryID != nil)
         .animation(.easeOut(duration: 0.2), value: showSharedMemoryAdd)
@@ -316,9 +337,39 @@ struct UsView: View {
                 memoryCarouselIndex = max(0, newCount - 1)
             }
         }
+        .onAppear {
+            store.refreshNotificationSources()
+        }
         .ignoresSafeArea(.keyboard)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(AppTab.us.screenIdentifier)
+    }
+
+    private func openNotification(_ notification: UsNotification) {
+        showNotifications = false
+        dismissTips()
+
+        switch notification.kind {
+        case .moodReaction:
+            onSelectTab?(.me)
+        case .loveNote:
+            showLoveNotesPage = true
+            if let id = notification.relatedID,
+               let note = store.loveNotes.first(where: { $0.id == id }) {
+                loveNoteReading = note
+            } else if let unread = store.incomingUnreadLoveNotes.first {
+                loveNoteReading = unread
+            }
+        case .importantDate:
+            store.refreshDateReminders()
+            showImportantDatesList = true
+        case .sharedMemory:
+            if let id = notification.relatedID {
+                openMemoryFeed(startingAt: id)
+            } else {
+                showSharedMemoriesPage = true
+            }
+        }
     }
 
     private func openWishlist(tab: WishlistPage.Tab) {
@@ -360,22 +411,42 @@ struct UsView: View {
     private var notificationsBell: some View {
         Button {
             dismissTips()
+            store.refreshNotificationSources()
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+                showNotifications = true
+            }
         } label: {
-            Image(systemName: "bell")
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(ink.opacity(0.56))
-                .frame(width: 40, height: 40)
-                .background {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "bell")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(ink.opacity(0.56))
+                    .frame(width: 40, height: 40)
+                    .background {
+                        Circle()
+                            .fill(Color.white.opacity(0.44))
+                            .overlay {
+                                Circle().stroke(ink.opacity(0.15), lineWidth: 1.5)
+                            }
+                            .shadow(color: ink.opacity(0.06), radius: 8, y: 2)
+                    }
+
+                if store.unreadNotificationsCount > 0 {
                     Circle()
-                        .fill(Color.white.opacity(0.44))
+                        .fill(BeSideColor.raspberry)
+                        .frame(width: 8, height: 8)
                         .overlay {
-                            Circle().stroke(ink.opacity(0.15), lineWidth: 1.5)
+                            Circle().stroke(Color.white.opacity(0.9), lineWidth: 1)
                         }
-                        .shadow(color: ink.opacity(0.06), radius: 8, y: 2)
+                        .offset(x: -2, y: 2)
                 }
+            }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Notifications")
+        .accessibilityLabel(
+            store.unreadNotificationsCount > 0
+                ? "Notifications, \(store.unreadNotificationsCount) unread"
+                : "Notifications"
+        )
         .accessibilityIdentifier("us.notifications")
     }
 

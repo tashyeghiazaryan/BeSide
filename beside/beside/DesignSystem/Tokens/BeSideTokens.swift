@@ -31,6 +31,9 @@ enum BeSideColor {
         )
     }
 
+    /// Unread badge / raspberry accent (малиновый).
+    static let raspberry = Color(hex: 0xD61F69)
+
     /// Love Notes tile — soft pastel pink (Figma `#F8BBD0`).
     static let loveNotePink = Color(hex: 0xF8BBD0)
     /// Love Notes tile — slightly warmer when there are incoming notes.

@@ -31,7 +31,7 @@ struct RootTabView: View {
         case .partner:
             PartnerView(store: meStore)
         case .us:
-            UsView(store: meStore)
+            UsView(store: meStore, onSelectTab: { selection = $0 })
         case .connection:
             ConnectionView()
         case .more:

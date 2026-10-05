@@ -94,6 +94,8 @@ final class MeSessionStore {
     var loveNotes: [LoveNote]
     /// Shared memories (session-only, seeded demos).
     var sharedMemories: [UsSharedMemory]
+    /// In-app notifications (session-only, seeded demos).
+    var notifications: [UsNotification]
 
     /// You shared a mood today (Me history).
     var meMoodSharedToday: Bool {
@@ -219,6 +221,108 @@ final class MeSessionStore {
         self.wishlistHistory = []
         self.loveNotes = LoveNote.demoSeed()
         self.sharedMemories = UsSharedMemories.demoSeed()
+        self.notifications = UsNotifications.demoSeed(partnerName: "Alex")
+        // Fill any live-derived events not already covered by the static demo seed.
+        refreshNotificationSources()
+    }
+
+    var unreadNotificationsCount: Int {
+        notifications.filter { !$0.read }.count
+    }
+
+    @discardableResult
+    func postNotification(
+        kind: UsNotificationKind,
+        title: String,
+        subtitle: String? = nil,
+        createdAt: Date = Date(),
+        read: Bool = false,
+        relatedID: String? = nil,
+        dedupeKey: String
+    ) -> Bool {
+        guard !notifications.contains(where: { $0.dedupeKey == dedupeKey }) else { return false }
+        let item = UsNotification(
+            id: "notif-\(UUID().uuidString)",
+            kind: kind,
+            title: title,
+            subtitle: subtitle,
+            createdAt: createdAt,
+            read: read,
+            relatedID: relatedID,
+            dedupeKey: dedupeKey
+        )
+        notifications.insert(item, at: 0)
+        return true
+    }
+
+    func markNotificationRead(id: String) {
+        guard let idx = notifications.firstIndex(where: { $0.id == id }) else { return }
+        notifications[idx].read = true
+    }
+
+    @discardableResult
+    func deleteNotification(id: String) -> Bool {
+        guard let idx = notifications.firstIndex(where: { $0.id == id }) else { return false }
+        notifications.remove(at: idx)
+        return true
+    }
+
+    /// Sync date / love-note / partner-memory notifications from current session state.
+    func refreshNotificationSources() {
+        refreshDateReminders()
+        syncLoveNoteNotifications()
+        syncPartnerMemoryNotifications()
+    }
+
+    func refreshDateReminders() {
+        for date in importantDates {
+            let days = UsImportantDates.daysUntil(date.date)
+            guard UsNotifications.dateReminderDayThresholds.contains(days) else { continue }
+            _ = postNotification(
+                kind: .importantDate,
+                title: "Upcoming: \(date.title)",
+                subtitle: UsNotifications.countdownSubtitle(daysUntil: days),
+                relatedID: date.id,
+                dedupeKey: "date-remind-\(date.id)-d\(days)"
+            )
+        }
+    }
+
+    private func syncLoveNoteNotifications() {
+        for note in loveNotes where note.direction == .incoming && note.status == .sent {
+            _ = postNotification(
+                kind: .loveNote,
+                title: "New love note is waiting",
+                subtitle: nil,
+                createdAt: note.createdAt,
+                relatedID: note.id,
+                dedupeKey: "lovenote-\(note.id)"
+            )
+        }
+    }
+
+    private func syncPartnerMemoryNotifications() {
+        for memory in sharedMemories where !memory.addedByUser {
+            _ = postNotification(
+                kind: .sharedMemory,
+                title: "New shared memory: \(memory.title)",
+                subtitle: nil,
+                createdAt: memory.dateTime,
+                relatedID: memory.id,
+                dedupeKey: "memory-\(memory.id)"
+            )
+        }
+    }
+
+    private func postMoodReactionNotification(for share: SharedMood) {
+        _ = postNotification(
+            kind: .moodReaction,
+            title: "\(partnerDisplayName) reacted to your mood",
+            subtitle: share.partnerReaction,
+            createdAt: Date(),
+            relatedID: share.id.uuidString,
+            dedupeKey: "mood-react-\(share.id.uuidString)"
+        )
     }
 
     /// Add a custom important date for this session. Returns false if title empty.
@@ -236,6 +340,7 @@ final class MeSessionStore {
             preset: icon
         )
         importantDates.append(entry)
+        refreshDateReminders()
         return true
     }
 
@@ -502,6 +607,7 @@ final class MeSessionStore {
         }
         history[history.count - 1].partnerReaction = reaction
         history[history.count - 1].partnerNote = limitedNote
+        postMoodReactionNotification(for: history[history.count - 1])
     }
 
     var selectedMood: Mood? {
