@@ -84,6 +84,16 @@ final class MeSessionStore {
     var partnerActivityDoneToday: Bool
     /// Important dates for Us (seeded + user-added this session).
     var importantDates: [UsImportantDate]
+    /// My wishlist items (session-only).
+    var myWishlist: [UsWishlistItem]
+    /// Partner wishlist (seeded demo).
+    var partnerWishlist: [UsWishlistItem]
+    /// Completed wishes history (session-only).
+    var wishlistHistory: [UsCompletedWish]
+    /// Love notes (session-only, seeded with demo incoming).
+    var loveNotes: [LoveNote]
+    /// Shared memories (session-only, seeded demos).
+    var sharedMemories: [UsSharedMemory]
 
     /// You shared a mood today (Me history).
     var meMoodSharedToday: Bool {
@@ -154,6 +164,36 @@ final class MeSessionStore {
         return UsImportantDates.daysUntil(nearest.date)
     }
 
+    /// Upcoming dates for the Us tile, soonest first.
+    var usTilePreviewDates: [UsImportantDate] {
+        let upcoming = importantDatesSorted.filter { UsImportantDates.daysUntil($0.date) >= 0 }
+        return upcoming.isEmpty ? importantDatesSorted : upcoming
+    }
+
+    /// Events on the same calendar day as the nearest preview — used for tile auto-rotation.
+    /// Empty when the nearest day has only one event.
+    var usSameDayTileDates: [UsImportantDate] {
+        guard let nearest = nearestImportantDate else { return [] }
+        let calendar = Calendar.current
+        let sameDay = usTilePreviewDates.filter {
+            calendar.isDate($0.date, inSameDayAs: nearest.date)
+        }
+        return sameDay.count > 1 ? sameDay : []
+    }
+
+    /// Featured dates on the tile: same-day group when there are several, else just the nearest.
+    var usTileRotatingDates: [UsImportantDate] {
+        let sameDay = usSameDayTileDates
+        if !sameDay.isEmpty { return sameDay }
+        if let nearest = nearestImportantDate { return [nearest] }
+        return []
+    }
+
+    /// Other events on that day besides the one currently shown.
+    var usTileExtraCount: Int {
+        max(0, usTileRotatingDates.count - 1)
+    }
+
     init(history: [SharedMood]? = nil, partnerCurrentMood: SharedMood? = nil) {
         self.history = history ?? Self.makeSeedHistory()
         let partnerMood = partnerCurrentMood ?? Self.makeSeedPartnerMood()
@@ -174,11 +214,16 @@ final class MeSessionStore {
             relationshipStart: relationshipStart,
             partnerName: "Alex"
         )
+        self.myWishlist = []
+        self.partnerWishlist = UsWishlist.partnerSeed()
+        self.wishlistHistory = []
+        self.loveNotes = LoveNote.demoSeed()
+        self.sharedMemories = UsSharedMemories.demoSeed()
     }
 
     /// Add a custom important date for this session. Returns false if title empty.
     @discardableResult
-    func addImportantDate(title: String, date: Date) -> Bool {
+    func addImportantDate(title: String, date: Date, icon: UsDateIconPreset = .defaultCustom) -> Bool {
         let clean = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty else { return false }
         let calendar = Calendar.current
@@ -188,9 +233,208 @@ final class MeSessionStore {
             title: clean,
             date: day,
             kind: .custom,
-            accentHex: 0x22C55E
+            preset: icon
         )
         importantDates.append(entry)
+        return true
+    }
+
+    @discardableResult
+    func deleteImportantDate(id: String) -> Bool {
+        guard let idx = importantDates.firstIndex(where: { $0.id == id }) else { return false }
+        importantDates.remove(at: idx)
+        return true
+    }
+
+    /// Add a wish to my list. Caption required; photo optional. Dedupes by caption (case-insensitive).
+    @discardableResult
+    func addMyWish(caption: String, photoData: Data?) -> Bool {
+        let clean = caption.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return false }
+        let limited = String(clean.prefix(UsWishlist.captionMaxLength))
+        if myWishlist.contains(where: { $0.caption.caseInsensitiveCompare(limited) == .orderedSame }) {
+            return false
+        }
+        var photoURL = ""
+        if let photoData, !photoData.isEmpty {
+            photoURL = "data:image/jpeg;base64,\(photoData.base64EncodedString())"
+        }
+        myWishlist.insert(
+            UsWishlistItem(id: "mw-\(UUID().uuidString)", caption: limited, photoURL: photoURL),
+            at: 0
+        )
+        return true
+    }
+
+    func removeMyWish(at index: Int) {
+        guard myWishlist.indices.contains(index) else { return }
+        myWishlist.remove(at: index)
+    }
+
+    /// Move a mine wish into history as fulfilled by partner (`for_me`).
+    func markMyWishDone(at index: Int) {
+        guard myWishlist.indices.contains(index) else { return }
+        let item = myWishlist.remove(at: index)
+        wishlistHistory.insert(
+            UsCompletedWish(
+                id: "done-\(UUID().uuidString)",
+                title: item.caption,
+                completedAt: Date(),
+                direction: .forMe
+            ),
+            at: 0
+        )
+    }
+
+    // MARK: - Love Notes
+
+    enum LoveNotesTileKind {
+        case empty, outgoingOnly, incomingActive
+    }
+
+    var incomingLoveNotes: [LoveNote] {
+        loveNotes.filter { $0.direction == .incoming }
+    }
+
+    var outgoingLoveNotes: [LoveNote] {
+        loveNotes.filter { $0.direction == .outgoing }
+    }
+
+    var incomingUnreadLoveNotes: [LoveNote] {
+        loveNotes.filter { $0.direction == .incoming && $0.status == .sent }
+    }
+
+    var loveNotesTileKind: LoveNotesTileKind {
+        if !incomingUnreadLoveNotes.isEmpty { return .incomingActive }
+        if !outgoingLoveNotes.isEmpty { return .outgoingOnly }
+        return .empty
+    }
+
+    @discardableResult
+    func sendLoveNote(body: String) -> Bool {
+        let sanitized = LoveNoteBody.sanitize(body)
+        let trimmed = sanitized.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        let note = LoveNote(
+            id: "ln-\(UUID().uuidString)",
+            body: trimmed,
+            createdAt: Date(),
+            direction: .outgoing,
+            status: .sent
+        )
+        loveNotes.insert(note, at: 0)
+        return true
+    }
+
+    func markNoteRead(id: String) {
+        guard let idx = loveNotes.firstIndex(where: { $0.id == id }) else { return }
+        guard loveNotes[idx].direction == .incoming, loveNotes[idx].status == .sent else { return }
+        loveNotes[idx].status = .read
+        loveNotes[idx].readAt = Date()
+    }
+
+    @discardableResult
+    func deleteLoveNote(id: String) -> Bool {
+        guard let idx = loveNotes.firstIndex(where: { $0.id == id }) else { return false }
+        loveNotes.remove(at: idx)
+        return true
+    }
+
+    // MARK: - Shared Memories
+
+    var userAddedSharedMemories: [UsSharedMemory] {
+        sharedMemories.filter(\.addedByUser)
+    }
+
+    /// Month keys (`YYYY-MM`) for all memories in preview + gallery, newest first.
+    var sharedMemoryMonthFilterKeys: [String] {
+        let keys = Set(sharedMemories.map { UsSharedMemories.monthKey($0.dateTime) })
+        return keys.sorted(by: >)
+    }
+
+    /// Same ordered list as the Us home preview carousel, optionally filtered by month.
+    func sharedMemories(filterMonthKey: String?) -> [UsSharedMemory] {
+        guard let filterMonthKey, filterMonthKey != "all" else { return sharedMemories }
+        return sharedMemories.filter { UsSharedMemories.monthKey($0.dateTime) == filterMonthKey }
+    }
+
+    func userAddedSharedMemories(filterMonthKey: String?) -> [UsSharedMemory] {
+        let items = userAddedSharedMemories
+        guard let filterMonthKey, filterMonthKey != "all" else { return items }
+        return items.filter { UsSharedMemories.monthKey($0.dateTime) == filterMonthKey }
+    }
+
+    func sharedMemory(id: String) -> UsSharedMemory? {
+        sharedMemories.first { $0.id == id }
+    }
+
+    @discardableResult
+    func addSharedMemory(
+        title: String,
+        dateTime: Date,
+        description: String,
+        mood: String,
+        photoData: Data?
+    ) -> Bool {
+        guard SharedMemoryFieldRules.validateTitle(title) == nil else { return false }
+        guard SharedMemoryFieldRules.validateDescription(description) == nil else { return false }
+        let clean = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        let moodValue = mood.isEmpty ? "💛" : mood
+        let jpeg = UsSharedMemories.normalizedJPEG(from: photoData)
+        let memory = UsSharedMemory(
+            id: "memory-\(UUID().uuidString)",
+            title: clean,
+            dateTime: dateTime,
+            description: cleanDescription,
+            mood: moodValue,
+            photoURL: "",
+            photoData: jpeg,
+            likes: 0,
+            likedByMe: false,
+            addedByUser: true
+        )
+        sharedMemories.insert(memory, at: 0)
+        return true
+    }
+
+    @discardableResult
+    func updateSharedMemory(
+        id: String,
+        title: String,
+        dateTime: Date,
+        description: String,
+        mood: String,
+        photoData: Data?,
+        removePhoto: Bool
+    ) -> Bool {
+        guard let idx = sharedMemories.firstIndex(where: { $0.id == id }) else { return false }
+        guard SharedMemoryFieldRules.validateTitle(title) == nil else { return false }
+        guard SharedMemoryFieldRules.validateDescription(description) == nil else { return false }
+
+        let clean = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let cleanDescription = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        let moodValue = mood.isEmpty ? sharedMemories[idx].mood : mood
+
+        sharedMemories[idx].title = clean
+        sharedMemories[idx].dateTime = dateTime
+        sharedMemories[idx].description = cleanDescription
+        sharedMemories[idx].mood = moodValue
+
+        if removePhoto {
+            sharedMemories[idx].photoData = nil
+            sharedMemories[idx].photoURL = ""
+        } else if let jpeg = UsSharedMemories.normalizedJPEG(from: photoData) {
+            sharedMemories[idx].photoData = jpeg
+            sharedMemories[idx].photoURL = ""
+        }
+        return true
+    }
+
+    @discardableResult
+    func deleteSharedMemory(id: String) -> Bool {
+        guard let idx = sharedMemories.firstIndex(where: { $0.id == id }) else { return false }
+        sharedMemories.remove(at: idx)
         return true
     }
 

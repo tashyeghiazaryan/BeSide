@@ -30,6 +30,12 @@ enum BeSideColor {
             endPoint: .bottomTrailing
         )
     }
+
+    /// Love Notes tile — soft pastel pink (Figma `#F8BBD0`).
+    static let loveNotePink = Color(hex: 0xF8BBD0)
+    /// Love Notes tile — slightly warmer when there are incoming notes.
+    static let loveNotePinkBright = Color(hex: 0xF4A8C4)
+    static let loveNotePinkDeep = Color(hex: 0xE8A0B8)
 }
 
 enum BeSideBackground {
@@ -60,6 +66,20 @@ enum BeSideBackground {
                 .blur(radius: 64)
         }
         .allowsHitTesting(false)
+    }
+
+    /// Love Notes page — soft pink-to-purple canvas (Figma Make Love Notes expanded).
+    static var loveNoteCanvas: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color(hex: 0xFDF2F8),
+                Color(hex: 0xFAF5FF),
+                Color(hex: 0xF8FAFC),
+                Color(hex: 0xF0FDF9),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
     }
 
     /// Mood-tinted ambient blurs (Figma Make Me — after tapping a sphere).

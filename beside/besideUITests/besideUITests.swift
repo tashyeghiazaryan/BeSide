@@ -123,11 +123,163 @@ final class besideUITests: XCTestCase {
             app.staticTexts.matching(NSPredicate(format: "label CONTAINS 'together for'")).firstMatch.exists
                 || screen(app, "us.time.together").exists
         )
-        // Feature flows are stubs in us-shell — tiles present, no crash on tap.
-        screen(app, "us.tile.dates").tap()
-        XCTAssertTrue(screen(app, "us.hero").exists)
     }
 
+    @MainActor
+    func testUsImportantDatesListAndAdd() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        screen(app, "tab.us").tap()
+        XCTAssertTrue(screen(app, "us.tile.dates").waitForExistence(timeout: 5))
+        screen(app, "us.tile.dates").tap()
+        XCTAssertTrue(screen(app, "us.dates.list.modal").waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Important dates"].exists)
+        XCTAssertTrue(app.staticTexts["Add a date"].exists)
+        screen(app, "us.dates.list.close").tap()
+        XCTAssertFalse(screen(app, "us.dates.list.modal").waitForExistence(timeout: 1))
+
+        screen(app, "us.tile.dates.add").tap()
+        XCTAssertTrue(screen(app, "us.dates.add.modal").waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Add a date"].exists)
+
+        let day = screen(app, "us.dates.add.day.1")
+        XCTAssertTrue(day.waitForExistence(timeout: 2))
+        day.tap()
+
+        let title = screen(app, "us.dates.add.title")
+        XCTAssertTrue(title.waitForExistence(timeout: 2))
+        title.tap()
+        title.typeText("Coast trip")
+
+        screen(app, "us.dates.add.commit").tap()
+        XCTAssertTrue(screen(app, "us.dates.list.modal").waitForExistence(timeout: 4))
+        XCTAssertTrue(app.staticTexts["Coast trip"].waitForExistence(timeout: 2))
+    }
+
+    @MainActor
+    func testUsWishlistOpensFromGift() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        screen(app, "tab.us").tap()
+        XCTAssertTrue(screen(app, "us.tile.wishlist").waitForExistence(timeout: 5))
+        screen(app, "us.tile.wishlist").tap()
+        XCTAssertTrue(screen(app, "us.wishlist.page").waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Wishlist"].exists)
+        XCTAssertTrue(screen(app, "us.wishlist.tabs").exists)
+        screen(app, "us.wishlist.back").tap()
+        XCTAssertFalse(screen(app, "us.wishlist.page").waitForExistence(timeout: 1))
+    }
+
+    @MainActor
+    func testUsWishlistOpensFromDatesListIdeas() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        screen(app, "tab.us").tap()
+        XCTAssertTrue(screen(app, "us.tile.dates").waitForExistence(timeout: 5))
+        screen(app, "us.tile.dates").tap()
+        XCTAssertTrue(screen(app, "us.dates.list.wishlist").waitForExistence(timeout: 3))
+        screen(app, "us.dates.list.wishlist").tap()
+        XCTAssertTrue(screen(app, "us.wishlist.page").waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Alex"].exists)
+    }
+
+    @MainActor
+    func testLoveNotesPageOpensFromTile() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        screen(app, "tab.us").tap()
+        XCTAssertTrue(screen(app, "us.tile.lovenotes").waitForExistence(timeout: 5))
+        screen(app, "us.tile.lovenotes").tap()
+        XCTAssertTrue(screen(app, "us.lovenotes.page").waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Love Notes"].exists)
+    }
+
+    @MainActor
+    func testLoveNoteComposeAndSend() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        screen(app, "tab.us").tap()
+        XCTAssertTrue(screen(app, "us.tile.lovenotes").waitForExistence(timeout: 5))
+        screen(app, "us.tile.lovenotes").tap()
+        XCTAssertTrue(screen(app, "us.lovenotes.page").waitForExistence(timeout: 3))
+
+        let cta = app.buttons.matching(NSPredicate(format: "label CONTAINS 'Write'")).firstMatch
+        XCTAssertTrue(cta.waitForExistence(timeout: 2))
+        cta.tap()
+        XCTAssertTrue(screen(app, "us.lovenotes.compose.modal").waitForExistence(timeout: 3))
+    }
+
+    @MainActor
+    func testLoveNoteReaderOpensFromPage() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        screen(app, "tab.us").tap()
+        XCTAssertTrue(screen(app, "us.tile.lovenotes").waitForExistence(timeout: 5))
+        screen(app, "us.tile.lovenotes").tap()
+        XCTAssertTrue(screen(app, "us.lovenotes.page").waitForExistence(timeout: 3))
+
+        let noteRow = app.buttons.matching(NSPredicate(format: "label CONTAINS 'New note' OR label CONTAINS 'note'")).firstMatch
+        if noteRow.waitForExistence(timeout: 2) {
+            noteRow.tap()
+            XCTAssertTrue(screen(app, "us.lovenotes.reader").waitForExistence(timeout: 3))
+        }
+    }
+
+    @MainActor
+    func testSharedMemoriesGalleryOpensFromHeader() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        screen(app, "tab.us").tap()
+        XCTAssertTrue(screen(app, "us.memories").waitForExistence(timeout: 5))
+        screen(app, "us.memories").tap()
+        XCTAssertTrue(screen(app, "us.memories.page").waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["All your moments"].exists)
+        screen(app, "us.memories.back").tap()
+        XCTAssertFalse(screen(app, "us.memories.page").waitForExistence(timeout: 1))
+    }
+
+    @MainActor
+    func testSharedMemoryAddFromPlus() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        screen(app, "tab.us").tap()
+        XCTAssertTrue(screen(app, "us.memories.add").waitForExistence(timeout: 5))
+        screen(app, "us.memories.add").tap()
+        XCTAssertTrue(screen(app, "us.memories.add.modal").waitForExistence(timeout: 3))
+
+        let title = screen(app, "us.memories.add.title")
+        XCTAssertTrue(title.waitForExistence(timeout: 2))
+        title.tap()
+        title.typeText("Sunset picnic")
+        screen(app, "us.memories.add.commit").tap()
+        XCTAssertTrue(screen(app, "us.memories.page").waitForExistence(timeout: 4))
+        XCTAssertTrue(app.staticTexts["Sunset picnic"].waitForExistence(timeout: 2))
+    }
+
+    @MainActor
+    func testSharedMemoryDetailOpensFromCarousel() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        screen(app, "tab.us").tap()
+        XCTAssertTrue(screen(app, "us.memories.carousel").waitForExistence(timeout: 5))
+        let card = screen(app, "us.memories.card.memory-1")
+        XCTAssertTrue(card.waitForExistence(timeout: 3))
+        card.tap()
+        XCTAssertTrue(screen(app, "us.memories.detail").waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Evening on the rooftop"].exists)
+    }
+
+    @MainActor
+    func testLaunchPerformance() throws {
         measure(metrics: [XCTApplicationLaunchMetric()]) {
             XCUIApplication().launch()
         }

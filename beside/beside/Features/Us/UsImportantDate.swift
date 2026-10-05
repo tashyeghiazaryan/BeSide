@@ -16,18 +16,52 @@ struct UsImportantDate: Identifiable, Hashable, Sendable {
     var title: String
     var date: Date
     var kind: Kind
-    /// Accent for list icon bubble (hex without alpha).
+    /// Accent for list icon sphere (hex without alpha).
     var accentHex: UInt32
+    /// SF Symbol inside the sphere.
+    var systemImage: String
+    /// Preset id when chosen from the add picker; nil for legacy seeds without a preset.
+    var iconPresetRaw: String?
 
     var accentColor: Color { Color(hex: accentHex) }
 
-    var systemImage: String {
-        switch kind {
-        case .nextDate, .special, .custom: return "sparkles"
-        case .anniversary, .valentines: return "heart.fill"
-        case .birthday: return "gift.fill"
-        case .newYear: return "sparkles"
-        }
+    var iconPreset: UsDateIconPreset? {
+        guard let iconPresetRaw else { return nil }
+        return UsDateIconPreset(rawValue: iconPresetRaw)
+    }
+
+    init(
+        id: String,
+        title: String,
+        date: Date,
+        kind: Kind,
+        accentHex: UInt32,
+        systemImage: String,
+        iconPresetRaw: String? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.date = date
+        self.kind = kind
+        self.accentHex = accentHex
+        self.systemImage = systemImage
+        self.iconPresetRaw = iconPresetRaw
+    }
+
+    init(
+        id: String,
+        title: String,
+        date: Date,
+        kind: Kind,
+        preset: UsDateIconPreset
+    ) {
+        self.id = id
+        self.title = title
+        self.date = date
+        self.kind = kind
+        self.accentHex = preset.accentHex
+        self.systemImage = preset.systemImage
+        self.iconPresetRaw = preset.rawValue
     }
 }
 
@@ -131,42 +165,42 @@ enum UsImportantDates {
                 title: "Next date together",
                 date: nextTogether,
                 kind: .nextDate,
-                accentHex: 0xFF555D
+                preset: .sparklesCoral
             ),
             UsImportantDate(
                 id: "anniversary",
                 title: "Our Anniversary",
                 date: nextAnnualOccurrence(of: relationshipStart, now: now, calendar: calendar),
                 kind: .anniversary,
-                accentHex: 0xFF555D
+                preset: .heartRose
             ),
             UsImportantDate(
                 id: "birthday",
                 title: "\(partnerName)'s Birthday",
                 date: nextAnnualOccurrence(of: birthday, now: now, calendar: calendar),
                 kind: .birthday,
-                accentHex: 0xA78BFA
+                preset: .giftLavender
             ),
             UsImportantDate(
                 id: "special-day",
                 title: "Our First Date",
                 date: nextAnnualOccurrence(of: special, now: now, calendar: calendar),
                 kind: .special,
-                accentHex: 0xFF555D
+                preset: .sparklesCoral
             ),
             UsImportantDate(
                 id: "valentines",
                 title: "Valentine's Day",
                 date: nextAnnualOccurrence(of: valentines, now: now, calendar: calendar),
                 kind: .valentines,
-                accentHex: 0xFF555D
+                preset: .heartRose
             ),
             UsImportantDate(
                 id: "new-year",
                 title: "New Year",
                 date: nextAnnualOccurrence(of: newYear, now: now, calendar: calendar),
                 kind: .newYear,
-                accentHex: 0x60A5FA
+                preset: .sparklesSky
             ),
         ]
     }
