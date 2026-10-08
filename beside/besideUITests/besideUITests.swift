@@ -279,6 +279,70 @@ final class besideUITests: XCTestCase {
     }
 
     @MainActor
+    func testConnectionTodaysActivityFlow() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        screen(app, "tab.connection").tap()
+        XCTAssertTrue(screen(app, "screen.connection").waitForExistence(timeout: 5))
+        XCTAssertTrue(screen(app, "connection.carousel").waitForExistence(timeout: 3))
+        XCTAssertTrue(screen(app, "connection.pill").exists)
+        XCTAssertTrue(screen(app, "connection.sections").exists)
+
+        let openCTA = screen(app, "connection.cta.activity")
+        XCTAssertTrue(openCTA.waitForExistence(timeout: 3), "Expected Today's Activity CTA on first slide")
+        openCTA.tap()
+
+        XCTAssertTrue(screen(app, "connection.activity.hub").waitForExistence(timeout: 3))
+        screen(app, "connection.activity.open").tap()
+        XCTAssertTrue(screen(app, "connection.activity.detail").waitForExistence(timeout: 3))
+        XCTAssertFalse(screen(app, "tab.bar").exists, "Tab bar should be hidden on the daily task screen")
+        screen(app, "connection.activity.done").tap()
+        XCTAssertTrue(screen(app, "connection.activity.waiting").waitForExistence(timeout: 2))
+        XCTAssertTrue(screen(app, "tab.bar").waitForExistence(timeout: 2), "Tab bar should return on the activity hub")
+        XCTAssertEqual(screen(app, "connection.activity.chip.you").label, "You, Waiting")
+        XCTAssertEqual(screen(app, "connection.activity.chip.partner").label, "Partner, Waiting")
+
+        // Partner submits → awaiting approval; chips stay Waiting until Count it.
+        XCTAssertTrue(screen(app, "connection.activity.pending").waitForExistence(timeout: 4))
+        XCTAssertEqual(screen(app, "connection.activity.chip.partner").label, "Partner, Waiting")
+
+        screen(app, "connection.activity.approve.partner-daily-today").tap()
+        XCTAssertEqual(screen(app, "connection.activity.chip.partner").label, "Partner, Done")
+
+        // Partner approves you → You Done + together celebration.
+        XCTAssertTrue(screen(app, "connection.activity.together").waitForExistence(timeout: 4))
+        XCTAssertEqual(screen(app, "connection.activity.chip.you").label, "You, Done")
+
+        screen(app, "connection.activity.back").tap()
+        XCTAssertTrue(screen(app, "connection.carousel").waitForExistence(timeout: 3))
+    }
+
+    @MainActor
+    func testConnectionSectionsIndexOpensSection() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        screen(app, "tab.connection").tap()
+        XCTAssertTrue(screen(app, "connection.sections").waitForExistence(timeout: 5))
+        screen(app, "connection.sections").tap()
+
+        XCTAssertTrue(screen(app, "connection.sections.page").waitForExistence(timeout: 3))
+        XCTAssertTrue(screen(app, "connection.sections.row.todays-activity").exists)
+        XCTAssertTrue(screen(app, "connection.sections.row.partner-quiz").exists)
+        XCTAssertTrue(screen(app, "connection.sections.row.try-premium").exists)
+
+        screen(app, "connection.sections.open.partner-quiz").tap()
+        XCTAssertTrue(screen(app, "connection.carousel").waitForExistence(timeout: 3))
+        XCTAssertTrue(screen(app, "connection.cta.start").waitForExistence(timeout: 2))
+
+        screen(app, "connection.sections").tap()
+        XCTAssertTrue(screen(app, "connection.sections.page").waitForExistence(timeout: 3))
+        screen(app, "connection.sections.open.todays-activity").tap()
+        XCTAssertTrue(screen(app, "connection.activity.hub").waitForExistence(timeout: 3))
+    }
+
+    @MainActor
     func testLaunchPerformance() throws {
         measure(metrics: [XCTApplicationLaunchMetric()]) {
             XCUIApplication().launch()

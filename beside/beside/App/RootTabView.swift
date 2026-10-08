@@ -4,20 +4,30 @@ struct RootTabView: View {
     @State private var selection: AppTab = .me
     @State private var meStore = MeSessionStore()
     @State private var isKeyboardVisible = false
+    @State private var hideFloatingTabBar = false
+
+    private var showFloatingTabBar: Bool {
+        !isKeyboardVisible && !hideFloatingTabBar
+    }
 
     var body: some View {
         ZStack(alignment: .bottom) {
             screen(for: selection)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            if !isKeyboardVisible {
+            if showFloatingTabBar {
                 FloatingTabBar(selection: $selection)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .bottom)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .zIndex(50)
             }
         }
         // Keep tab layouts fixed — keyboard overlays on top (Me custom wish, Partner note, etc.).
         .ignoresSafeArea(.keyboard)
         .animation(.easeOut(duration: 0.25), value: isKeyboardVisible)
+        .animation(.easeOut(duration: 0.25), value: hideFloatingTabBar)
+        .onPreferenceChange(HideFloatingTabBarKey.self) { hideFloatingTabBar = $0 }
         .onReceive(KeyboardVisibility.publisher) { visible in
             isKeyboardVisible = visible
         }
@@ -33,7 +43,7 @@ struct RootTabView: View {
         case .us:
             UsView(store: meStore, onSelectTab: { selection = $0 })
         case .connection:
-            ConnectionView()
+            ConnectionView(store: meStore)
         case .more:
             MoreView()
         }

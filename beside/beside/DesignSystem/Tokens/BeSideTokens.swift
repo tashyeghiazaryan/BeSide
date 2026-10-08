@@ -51,6 +51,45 @@ enum BeSideBackground {
         )
     }
 
+    /// Connection Today's Activity / Sections — soft gray canvas (Figma Make).
+    static var activityCanvas: LinearGradient {
+        LinearGradient(
+            colors: [Color(hex: 0xF9FAFB), Color.white, Color(hex: 0xF3F4F6)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    /// Pink / mint ambient blurs for Connection activity surfaces.
+    static func activityAmbientBlobs() -> some View {
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [Color(hex: 0xFBCFE8).opacity(0.55), Color(hex: 0xC4B5FD).opacity(0.4)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 360, height: 360)
+                .blur(radius: 110)
+                .offset(x: -100, y: -140)
+
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [Color(hex: 0xA7F3D0).opacity(0.35), Color(hex: 0x93C5FD).opacity(0.45)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: 300, height: 300)
+                .blur(radius: 100)
+                .offset(x: 120, y: 320)
+        }
+        .allowsHitTesting(false)
+    }
+
     static func defaultAmbientBlobs() -> some View {
         ZStack {
             Circle()

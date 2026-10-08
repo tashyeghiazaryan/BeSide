@@ -79,9 +79,18 @@ final class MeSessionStore {
     var usLongTermPoints: Int
     /// Current daily streak days (demo default 3).
     var usStreakDays: Int
-    /// Couples prompt completion today (you / partner) — demo both incomplete.
+    /// Daily task counted today after the partner approved your submission.
     var meActivityDoneToday: Bool
+    /// Partner's daily task counted today after you approved their submission.
     var partnerActivityDoneToday: Bool
+    /// You tapped Mark as done (still Waiting until they approve).
+    var meDailySubmittedToday: Bool
+    /// Partner tapped Mark as done (still Waiting until you approve).
+    var partnerDailySubmittedToday: Bool
+    /// Partner answers awaiting approval on Connection → Today's Activity (session).
+    var connectionPendingAnswers: [ConnectionPendingAnswer]
+    /// Daily task phase for Today's Activity hub (session).
+    var connectionDailyPhase: ConnectionDailyPhase
     /// Important dates for Us (seeded + user-added this session).
     var importantDates: [UsImportantDate]
     /// My wishlist items (session-only).
@@ -212,6 +221,10 @@ final class MeSessionStore {
         self.usStreakDays = 3
         self.meActivityDoneToday = false
         self.partnerActivityDoneToday = false
+        self.meDailySubmittedToday = false
+        self.partnerDailySubmittedToday = false
+        self.connectionPendingAnswers = ConnectionPendingAnswers.demoSeed(partnerName: "Alex")
+        self.connectionDailyPhase = .closed
         self.importantDates = UsImportantDates.makeSeedDates(
             relationshipStart: relationshipStart,
             partnerName: "Alex"
@@ -558,6 +571,80 @@ final class MeSessionStore {
 
     func completePairing() {
         isPaired = true
+    }
+
+    func openConnectionDailyTask() {
+        if connectionDailyPhase == .closed {
+            connectionDailyPhase = .open
+        }
+    }
+
+    func markDailyActivityDone() {
+        connectionDailyPhase = .waiting
+        meDailySubmittedToday = true
+        // Session demo: partner also marks done so their task appears for your approval.
+        scheduleDemoPartnerSubmitIfNeeded()
+    }
+
+    /// Partner tapped Mark as done — task awaits your approval; their chip stays Waiting until you Count it.
+    func partnerMarkDailyActivityDone(
+        task: String = ConnectionCarousel.defaultPartnerTask
+    ) {
+        partnerDailySubmittedToday = true
+        let id = "partner-daily-today"
+        guard !connectionPendingAnswers.contains(where: { $0.id == id }) else { return }
+        connectionPendingAnswers.insert(
+            ConnectionPendingAnswer(
+                id: id,
+                partnerName: partnerDisplayName,
+                task: task,
+                submittedAt: "Today · just now"
+            ),
+            at: 0
+        )
+    }
+
+    /// You approved partner's task — Partner chip → Done.
+    @discardableResult
+    func approvePendingAnswer(id: String) -> Bool {
+        guard let idx = connectionPendingAnswers.firstIndex(where: { $0.id == id }) else { return false }
+        connectionPendingAnswers.remove(at: idx)
+        partnerActivityDoneToday = true
+        // Session demo: partner approves your task next so You chip → Done and celebration can play.
+        scheduleDemoPartnerApprovesMeIfNeeded()
+        return true
+    }
+
+    /// Partner approved your task — You chip → Done.
+    func partnerApproveMyDailyActivity() {
+        guard meDailySubmittedToday else { return }
+        meActivityDoneToday = true
+    }
+
+    /// Dismiss a partner answer without counting it — Partner chip stays Waiting.
+    @discardableResult
+    func declinePendingAnswer(id: String) -> Bool {
+        guard let idx = connectionPendingAnswers.firstIndex(where: { $0.id == id }) else { return false }
+        connectionPendingAnswers.remove(at: idx)
+        return true
+    }
+
+    private func scheduleDemoPartnerSubmitIfNeeded() {
+        guard !partnerDailySubmittedToday else { return }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            guard connectionDailyPhase == .waiting, !partnerDailySubmittedToday else { return }
+            partnerMarkDailyActivityDone()
+        }
+    }
+
+    private func scheduleDemoPartnerApprovesMeIfNeeded() {
+        guard meDailySubmittedToday, !meActivityDoneToday else { return }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            guard meDailySubmittedToday, !meActivityDoneToday else { return }
+            partnerApproveMyDailyActivity()
+        }
     }
 
     func partnerWeekBuckets(now: Date = Date()) -> [DayBucket] {
