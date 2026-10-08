@@ -7,6 +7,7 @@ struct ConnectionView: View {
     @State private var slides = ConnectionCarousel.demoSlides()
     @State private var carouselIndex = 0
     @State private var showTodaysActivity = false
+    @State private var showQuestionOfTheDay = false
     @State private var showSections = false
     @State private var autoAdvanceToken = UUID()
 
@@ -23,7 +24,7 @@ struct ConnectionView: View {
     }
 
     private var isOverlayOpen: Bool {
-        showTodaysActivity || showSections
+        showTodaysActivity || showQuestionOfTheDay || showSections
     }
 
     private var activitySlide: ConnectionCarouselSlide {
@@ -53,6 +54,20 @@ struct ConnectionView: View {
                 .zIndex(10)
             }
 
+            if showQuestionOfTheDay {
+                QuestionOfTheDayHub(
+                    store: store,
+                    onClose: {
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            showQuestionOfTheDay = false
+                        }
+                        bumpAutoAdvance()
+                    }
+                )
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                .zIndex(10)
+            }
+
             if showSections {
                 ConnectionSectionsPage(
                     slides: slides,
@@ -70,9 +85,13 @@ struct ConnectionView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Color(hex: 0x0A0A0A).ignoresSafeArea())
         .animation(.easeOut(duration: 0.28), value: showTodaysActivity)
+        .animation(.easeOut(duration: 0.28), value: showQuestionOfTheDay)
         .animation(.easeOut(duration: 0.28), value: showSections)
         .onAppear { bumpAutoAdvance() }
         .onChange(of: showTodaysActivity) { _, open in
+            if !open { bumpAutoAdvance() }
+        }
+        .onChange(of: showQuestionOfTheDay) { _, open in
             if !open { bumpAutoAdvance() }
         }
         .onChange(of: showSections) { _, open in
@@ -139,6 +158,14 @@ struct ConnectionView: View {
 
             // CTA — vertically centered (Figma `inset-0 flex items-center justify-center`)
             startButton
+
+            // Dedicated AX marker — avoid putting the carousel id on the drag container
+            // (that overwrites child identifiers like pill / sections / CTA).
+            Color.clear
+                .frame(width: 1, height: 1)
+                .accessibilityIdentifier("connection.carousel")
+                .accessibilityLabel("Connection carousel")
+                .allowsHitTesting(false)
         }
         .frame(width: size.width, height: size.height)
         .clipped()
@@ -154,7 +181,6 @@ struct ConnectionView: View {
                     }
                 }
         )
-        .accessibilityIdentifier("connection.carousel")
     }
 
     private var connectionPill: some View {
@@ -177,6 +203,7 @@ struct ConnectionView: View {
                     Capsule().stroke(Color.white.opacity(0.15), lineWidth: 1)
                 }
         }
+        .accessibilityElement(children: .combine)
         .accessibilityIdentifier("connection.pill")
     }
 
@@ -259,9 +286,13 @@ struct ConnectionView: View {
                 }
         }
         .buttonStyle(.plain)
-        .accessibilityIdentifier(
-            currentSlide.isTodaysActivity ? "connection.cta.activity" : "connection.cta.start"
-        )
+        .accessibilityIdentifier(startAccessibilityID)
+    }
+
+    private var startAccessibilityID: String {
+        if currentSlide.isTodaysActivity { return "connection.cta.activity" }
+        if currentSlide.isQuestionOfTheDay { return "connection.cta.qotd" }
+        return "connection.cta.start"
     }
 
     @ViewBuilder
@@ -310,9 +341,16 @@ struct ConnectionView: View {
     }
 
     private func handleStart() {
-        guard currentSlide.isTodaysActivity else { return }
-        withAnimation(.easeOut(duration: 0.28)) {
-            showTodaysActivity = true
+        if currentSlide.isTodaysActivity {
+            withAnimation(.easeOut(duration: 0.28)) {
+                showTodaysActivity = true
+            }
+            return
+        }
+        if currentSlide.isQuestionOfTheDay {
+            withAnimation(.easeOut(duration: 0.28)) {
+                showQuestionOfTheDay = true
+            }
         }
     }
 
@@ -323,10 +361,10 @@ struct ConnectionView: View {
 
         withAnimation(.easeOut(duration: 0.28)) {
             showSections = false
-            // Today's Activity has a dedicated hub; other sections land on their carousel slide.
             showTodaysActivity = slide.isTodaysActivity
+            showQuestionOfTheDay = slide.isQuestionOfTheDay
         }
-        if !slide.isTodaysActivity {
+        if !slide.isTodaysActivity && !slide.isQuestionOfTheDay {
             bumpAutoAdvance()
         }
     }

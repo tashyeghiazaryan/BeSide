@@ -62,21 +62,22 @@ struct ConnectionSectionsPage: View {
             let bottomPad = BeSideMetrics.tabBarClearance + 8
             let usableHeight = max(geo.size.height - stackTopPad - bottomPad, 0)
             let count = max(slides.count, 1)
-            let cardHeight = max(
-                (usableHeight - cardSpacing * CGFloat(count - 1)) / CGFloat(count),
-                132
-            )
+            let evenly = (usableHeight - cardSpacing * CGFloat(count - 1)) / CGFloat(count)
+            // Prefer fitting all cards on screen; allow a shorter floor when there are four+ sections.
+            let cardHeight = max(evenly, count > 3 ? 110 : 132)
 
-            VStack(spacing: cardSpacing) {
-                ForEach(slides) { slide in
-                    sectionCard(slide, height: cardHeight)
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: cardSpacing) {
+                    ForEach(slides) { slide in
+                        sectionCard(slide, height: cardHeight)
+                    }
                 }
-                Spacer(minLength: 0)
+                .padding(.horizontal, horizontalInset)
+                .padding(.top, stackTopPad)
+                .padding(.bottom, bottomPad)
+                .frame(minHeight: usableHeight + stackTopPad + bottomPad, alignment: .top)
             }
-            .padding(.horizontal, horizontalInset)
-            .padding(.top, stackTopPad)
-            .padding(.bottom, bottomPad)
-            .frame(width: geo.size.width, height: geo.size.height, alignment: .top)
+            .frame(width: geo.size.width, height: geo.size.height)
         }
     }
 
@@ -160,6 +161,8 @@ struct ConnectionSectionsPage: View {
         .onTapGesture { onOpen(slide) }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("connection.sections.row.\(slide.id)")
+        // Named so UITests can find the row even when child Open buttons own the focus.
+        .accessibilityLabel(slide.title ?? "Section")
     }
 
     @ViewBuilder

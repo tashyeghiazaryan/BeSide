@@ -10,13 +10,23 @@ struct ConnectionCarouselSlide: Identifiable, Equatable, Sendable {
 
     var isTodaysActivity: Bool { id == ConnectionCarousel.todaysActivityID }
 
+    var isQuestionOfTheDay: Bool { id == ConnectionCarousel.questionOfTheDayID }
+
     var hasPairedTasks: Bool {
         userTask != nil && partnerTask != nil
     }
 }
 
+enum QuestionOfTheDay {
+    static let defaultPrompt =
+        "What’s one small thing your partner did recently that made you feel closer?"
+    static let defaultPartnerAnswer =
+        "When you made coffee for me without asking — it felt like you were looking out for me."
+}
+
 enum ConnectionCarousel {
     static let todaysActivityID = "todays-activity"
+    static let questionOfTheDayID = "question-of-the-day"
 
     static let defaultUserTask =
         "Send a short voice note: one thing you appreciated about your partner today, even if it was tiny."
@@ -44,6 +54,14 @@ enum ConnectionCarousel {
                 userTask: defaultUserTask,
                 partnerTask: defaultPartnerTask,
                 imageURL: "https://images.unsplash.com/photo-1516589178581-6cd7833ae3b2?\(portraitQuery)"
+            ),
+            ConnectionCarouselSlide(
+                id: questionOfTheDayID,
+                title: "Question of the day",
+                body: "One shared question for both of you. Answer privately—your replies open as a dialogue when you’ve both written something.",
+                userTask: nil,
+                partnerTask: nil,
+                imageURL: "https://images.unsplash.com/photo-1511632765486-a01980e01a18?\(portraitQuery)"
             ),
             ConnectionCarouselSlide(
                 id: "partner-quiz",

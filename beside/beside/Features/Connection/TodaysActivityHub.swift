@@ -94,6 +94,7 @@ struct TodaysActivityHub: View {
         .onDisappear {
             stopCelebrationLoop()
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("connection.activity.hub")
     }
 
@@ -238,6 +239,7 @@ struct TodaysActivityHub: View {
                     y: 10
                 )
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("connection.activity.daily")
     }
 
@@ -262,6 +264,7 @@ struct TodaysActivityHub: View {
                     showDailyTaskDetail = true
                 }
             }
+            .accessibilityElement(children: .combine)
             .accessibilityIdentifier("connection.activity.open")
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
@@ -300,6 +303,7 @@ struct TodaysActivityHub: View {
             progressChipsRow
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("connection.activity.waiting")
     }
 
@@ -349,6 +353,7 @@ struct TodaysActivityHub: View {
             progressChipsRow
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("connection.activity.together")
     }
 
@@ -453,6 +458,7 @@ struct TodaysActivityHub: View {
                 }
                 .shadow(color: Color(hex: 0x504670).opacity(0.08), radius: 20, y: 8)
         }
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("connection.activity.pending")
     }
 

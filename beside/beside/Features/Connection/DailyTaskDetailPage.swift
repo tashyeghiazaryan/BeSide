@@ -36,10 +36,12 @@ struct DailyTaskDetailPage: View {
                 softPinkButton(title: "Mark as done", showArrow: true, action: onMarkDone)
                     .padding(.horizontal, 24)
                     .padding(.bottom, 40)
+                    .accessibilityElement(children: .combine)
                     .accessibilityIdentifier("connection.activity.done")
             }
         }
         .hidesFloatingTabBar()
+        .accessibilityElement(children: .contain)
         .accessibilityIdentifier("connection.activity.detail")
     }
 

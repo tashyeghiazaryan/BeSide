@@ -91,6 +91,12 @@ final class MeSessionStore {
     var connectionPendingAnswers: [ConnectionPendingAnswer]
     /// Daily task phase for Today's Activity hub (session).
     var connectionDailyPhase: ConnectionDailyPhase
+    /// Shared Question of the day prompt (session seed).
+    var questionOfTheDayPrompt: String
+    /// Your free-text answer for today's question (nil until submitted).
+    var meQuestionAnswer: String?
+    /// Partner's free-text answer (nil until they submit / demo arrives).
+    var partnerQuestionAnswer: String?
     /// Important dates for Us (seeded + user-added this session).
     var importantDates: [UsImportantDate]
     /// My wishlist items (session-only).
@@ -225,6 +231,9 @@ final class MeSessionStore {
         self.partnerDailySubmittedToday = false
         self.connectionPendingAnswers = ConnectionPendingAnswers.demoSeed(partnerName: "Alex")
         self.connectionDailyPhase = .closed
+        self.questionOfTheDayPrompt = QuestionOfTheDay.defaultPrompt
+        self.meQuestionAnswer = nil
+        self.partnerQuestionAnswer = nil
         self.importantDates = UsImportantDates.makeSeedDates(
             relationshipStart: relationshipStart,
             partnerName: "Alex"
@@ -573,9 +582,48 @@ final class MeSessionStore {
         isPaired = true
     }
 
+    /// Both partners submitted non-empty answers — dialogue may reveal.
+    var bothQuestionAnswersReady: Bool {
+        let me = meQuestionAnswer?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let partner = partnerQuestionAnswer?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return !me.isEmpty && !partner.isEmpty
+    }
+
+    var hasMeQuestionAnswer: Bool {
+        !(meQuestionAnswer?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+    }
+
     func openConnectionDailyTask() {
         if connectionDailyPhase == .closed {
             connectionDailyPhase = .open
+        }
+    }
+
+    /// Submit your Question of the day answer; schedules a demo partner reply if needed.
+    @discardableResult
+    func submitQuestionOfTheDayAnswer(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, meQuestionAnswer == nil else { return false }
+        meQuestionAnswer = trimmed
+        scheduleDemoPartnerQuestionAnswerIfNeeded()
+        return true
+    }
+
+    /// Partner submits their answer (session demo / tests).
+    func partnerSubmitQuestionOfTheDayAnswer(
+        _ text: String = QuestionOfTheDay.defaultPartnerAnswer
+    ) {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty, partnerQuestionAnswer == nil else { return }
+        partnerQuestionAnswer = trimmed
+    }
+
+    private func scheduleDemoPartnerQuestionAnswerIfNeeded() {
+        guard partnerQuestionAnswer == nil else { return }
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 2_200_000_000)
+            guard meQuestionAnswer != nil, partnerQuestionAnswer == nil else { return }
+            partnerSubmitQuestionOfTheDayAnswer()
         }
     }
 
