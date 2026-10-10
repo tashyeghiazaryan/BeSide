@@ -4,6 +4,11 @@ import UIKit
 /// Non-dismissible invite / join overlay from Figma Make Partner.
 struct PartnerPairingModal: View {
     let inviteCode: String
+    var usesLiveBackend: Bool = false
+    var onCreateInvite: (() async throws -> String)?
+    var onJoin: ((String) async throws -> Void)?
+    var onRefresh: (() async -> Void)?
+    /// Demo unlock, or called after a successful join / when already fully paired.
     let onPaired: () -> Void
 
     private enum Step {
@@ -15,6 +20,9 @@ struct PartnerPairingModal: View {
     @State private var step: Step = .choose
     @State private var joinCode = ""
     @State private var codeCopied = false
+    @State private var displayedInviteCode: String = ""
+    @State private var isWorking = false
+    @State private var errorMessage: String?
 
     var body: some View {
         ZStack {
@@ -35,6 +43,14 @@ struct PartnerPairingModal: View {
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("partner.pairing.modal")
+        .onAppear {
+            displayedInviteCode = inviteCode
+        }
+        .onChange(of: inviteCode) { _, newValue in
+            if !newValue.isEmpty {
+                displayedInviteCode = newValue
+            }
+        }
     }
 
     private var card: some View {
@@ -78,6 +94,14 @@ struct PartnerPairingModal: View {
                     inviteContent
                 case .join:
                     joinContent
+                }
+
+                if let errorMessage {
+                    Text(errorMessage)
+                        .font(.system(size: 12, weight: .light))
+                        .foregroundStyle(Color(hex: 0xFB7185))
+                        .multilineTextAlignment(.center)
+                        .padding(.top, 12)
                 }
             }
             .padding(.horizontal, 20)
@@ -134,23 +158,28 @@ struct PartnerPairingModal: View {
             .padding(.bottom, 20)
 
             Button {
-                step = .invite
+                Task { await startInvite() }
             } label: {
-                Text("Invite the partner")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(BeSideColor.navyLabel)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(BeSideColor.navyFill)
-                            .shadow(color: BeSideColor.navyStart.opacity(0.22), radius: 12, y: 4)
-                    }
+                HStack {
+                    if isWorking && step == .choose { ProgressView().tint(BeSideColor.navyLabel) }
+                    Text("Invite the partner")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(BeSideColor.navyLabel)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(BeSideColor.navyFill)
+                        .shadow(color: BeSideColor.navyStart.opacity(0.22), radius: 12, y: 4)
+                }
             }
             .buttonStyle(.plain)
+            .disabled(isWorking)
             .accessibilityIdentifier("partner.pair.invite")
 
             Button {
+                errorMessage = nil
                 step = .join
             } label: {
                 Text("Join the partner")
@@ -169,6 +198,7 @@ struct PartnerPairingModal: View {
             }
             .buttonStyle(.plain)
             .padding(.top, 10)
+            .disabled(isWorking)
             .accessibilityIdentifier("partner.pair.join")
 
             Text("Connect a partner to unlock this screen.")
@@ -188,7 +218,7 @@ struct PartnerPairingModal: View {
                         .tracking(1)
                         .textCase(.uppercase)
                         .foregroundStyle(Color.gray.opacity(0.7))
-                    Text(inviteCode)
+                    Text(displayedInviteCode.isEmpty ? "…" : displayedInviteCode)
                         .font(.system(size: 15, weight: .medium))
                         .tracking(1.5)
                         .foregroundStyle(BeSideColor.textPrimary)
@@ -196,7 +226,7 @@ struct PartnerPairingModal: View {
                 }
                 Spacer(minLength: 8)
                 Button(codeCopied ? "Copied" : "Copy") {
-                    UIPasteboard.general.string = inviteCode
+                    UIPasteboard.general.string = displayedInviteCode
                     codeCopied = true
                     Task {
                         try? await Task.sleep(for: .seconds(1.8))
@@ -216,6 +246,7 @@ struct PartnerPairingModal: View {
                         }
                 }
                 .buttonStyle(.plain)
+                .disabled(displayedInviteCode.isEmpty)
                 .accessibilityIdentifier("partner.pair.copy")
             }
             .padding(14)
@@ -228,26 +259,59 @@ struct PartnerPairingModal: View {
                     }
             }
 
-            // Demo unlock: copy path still lets you continue without a real partner.
-            Button("Continue with this code") {
-                onPaired()
-            }
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(BeSideColor.navyLabel)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
-            .background {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .fill(BeSideColor.navyFill)
-            }
-            .buttonStyle(.plain)
-            .accessibilityIdentifier("partner.pair.continue")
+            if usesLiveBackend {
+                Text("Waiting for your partner to join with this code.")
+                    .font(.system(size: 12, weight: .light))
+                    .foregroundStyle(Color.gray.opacity(0.75))
+                    .multilineTextAlignment(.center)
 
-            Button("Back") { step = .choose }
-                .font(.system(size: 11, weight: .light))
-                .foregroundStyle(Color.gray.opacity(0.55))
+                Button {
+                    Task {
+                        isWorking = true
+                        defer { isWorking = false }
+                        await onRefresh?()
+                    }
+                } label: {
+                    HStack {
+                        if isWorking { ProgressView() }
+                        Text("Check if they joined")
+                            .font(.system(size: 13, weight: .medium))
+                    }
+                    .foregroundStyle(BeSideColor.navyLabel)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(BeSideColor.navyFill)
+                    }
+                }
                 .buttonStyle(.plain)
-                .padding(.top, 4)
+                .disabled(isWorking)
+                .accessibilityIdentifier("partner.pair.refresh")
+            } else {
+                Button("Continue with this code") {
+                    onPaired()
+                }
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(BeSideColor.navyLabel)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background {
+                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                        .fill(BeSideColor.navyFill)
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("partner.pair.continue")
+            }
+
+            Button("Back") {
+                errorMessage = nil
+                step = .choose
+            }
+            .font(.system(size: 11, weight: .light))
+            .foregroundStyle(Color.gray.opacity(0.55))
+            .buttonStyle(.plain)
+            .padding(.top, 4)
         }
     }
 
@@ -281,27 +345,68 @@ struct PartnerPairingModal: View {
             }
 
             Button {
-                onPaired()
+                Task { await confirmJoin() }
             } label: {
-                Text("Join")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(BeSideColor.navyLabel)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background {
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .fill(BeSideColor.navyFill)
-                    }
+                HStack {
+                    if isWorking { ProgressView().tint(BeSideColor.navyLabel) }
+                    Text("Join")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(BeSideColor.navyLabel)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .background {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(BeSideColor.navyFill)
+                }
             }
             .buttonStyle(.plain)
-            .disabled(joinCode.trimmingCharacters(in: .whitespacesAndNewlines).count < 4)
+            .disabled(isWorking || joinCode.trimmingCharacters(in: .whitespacesAndNewlines).count < 4)
             .opacity(joinCode.trimmingCharacters(in: .whitespacesAndNewlines).count < 4 ? 0.5 : 1)
             .accessibilityIdentifier("partner.pair.join.confirm")
 
-            Button("Back") { step = .choose }
-                .font(.system(size: 11, weight: .light))
-                .foregroundStyle(Color.gray.opacity(0.55))
-                .buttonStyle(.plain)
+            Button("Back") {
+                errorMessage = nil
+                step = .choose
+            }
+            .font(.system(size: 11, weight: .light))
+            .foregroundStyle(Color.gray.opacity(0.55))
+            .buttonStyle(.plain)
+        }
+    }
+
+    private func startInvite() async {
+        errorMessage = nil
+        if usesLiveBackend, let onCreateInvite {
+            isWorking = true
+            defer { isWorking = false }
+            do {
+                let code = try await onCreateInvite()
+                displayedInviteCode = code
+                step = .invite
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        } else {
+            displayedInviteCode = inviteCode
+            step = .invite
+        }
+    }
+
+    private func confirmJoin() async {
+        errorMessage = nil
+        let code = joinCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        if usesLiveBackend, let onJoin {
+            isWorking = true
+            defer { isWorking = false }
+            do {
+                try await onJoin(code)
+                onPaired()
+            } catch {
+                errorMessage = error.localizedDescription
+            }
+        } else {
+            onPaired()
         }
     }
 

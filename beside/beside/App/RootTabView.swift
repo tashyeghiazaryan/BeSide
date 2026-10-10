@@ -1,8 +1,10 @@
 import SwiftUI
 
 struct RootTabView: View {
+    @Bindable var meStore: MeSessionStore
+    var session: AppSessionStore?
+
     @State private var selection: AppTab = .me
-    @State private var meStore = MeSessionStore()
     @State private var isKeyboardVisible = false
     @State private var hideFloatingTabBar = false
     @State private var darkFloatingTabBar = false
@@ -42,7 +44,7 @@ struct RootTabView: View {
         case .me:
             MeView(store: meStore)
         case .partner:
-            PartnerView(store: meStore)
+            PartnerView(store: meStore, session: session)
         case .us:
             UsView(store: meStore, onSelectTab: { selection = $0 })
         case .connection:
@@ -68,5 +70,5 @@ struct TabPlaceholder: View {
 }
 
 #Preview {
-    RootTabView()
+    RootTabView(meStore: MeSessionStore(), session: nil)
 }

@@ -3,6 +3,7 @@ import UIKit
 
 struct PartnerView: View {
     @Bindable var store: MeSessionStore
+    var session: AppSessionStore?
 
     /// Composer open for pick emoji + optional note, then one Send.
     @State private var isComposing = false
@@ -44,9 +45,40 @@ struct PartnerView: View {
                     .allowsHitTesting(store.isPaired)
 
                 if !store.isPaired {
-                    PartnerPairingModal(inviteCode: store.inviteCode) {
-                        store.completePairing()
-                    }
+                    PartnerPairingModal(
+                        inviteCode: store.inviteCode,
+                        usesLiveBackend: session?.phase == .authenticated,
+                        onCreateInvite: session.map { session in
+                            {
+                                let code = try await session.createCouple(displayName: store.displayName)
+                                if let context = session.coupleContext {
+                                    store.applyCoupleContext(context)
+                                } else {
+                                    store.inviteCode = code
+                                }
+                                return code
+                            }
+                        },
+                        onJoin: session.map { session in
+                            { code in
+                                try await session.joinCouple(code: code)
+                                if let context = session.coupleContext {
+                                    store.applyCoupleContext(context)
+                                }
+                            }
+                        },
+                        onRefresh: session.map { session in
+                            {
+                                await session.refreshCoupleContext()
+                                if let context = session.coupleContext {
+                                    store.applyCoupleContext(context)
+                                }
+                            }
+                        },
+                        onPaired: {
+                            store.completePairing()
+                        }
+                    )
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)

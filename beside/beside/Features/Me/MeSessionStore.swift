@@ -52,6 +52,12 @@ final class MeSessionStore {
     var history: [SharedMood]
     var expandedDayKey: String?
     var activeAlert: WishShareAlert?
+    /// Last live sync error (Supabase mode).
+    var syncError: String?
+
+    /// Set when authenticated + paired with a live gateway.
+    var liveGateway: CoupleBackendGateway?
+    var livePollTask: Task<Void, Never>?
 
     var displayName = "Anna"
     var partnerDisplayName = "Alex"
@@ -61,8 +67,8 @@ final class MeSessionStore {
     /// Partner mood shares for the week strip (includes current).
     var partnerHistory: [SharedMood]
     var expandedPartnerDayKey: String?
-    /// Demo default paired so Partner mood UI is reachable (Figma invite modal still supported).
-    var isPaired: Bool = true
+    /// Demo defaults paired; Supabase mode starts unpaired until membership syncs.
+    var isPaired: Bool = !BackendConfiguration.usesSupabase
     var inviteCode: String = "BESIDE-4K2M"
     /// Your emoji reaction to the partner's mood.
     var myReactionToPartner: String?
@@ -392,6 +398,26 @@ final class MeSessionStore {
         )
         importantDates.append(entry)
         refreshDateReminders()
+        if let gateway = liveGateway {
+            let accent = String(format: "%06X", entry.accentHex)
+            Task {
+                do {
+                    let saved = try await gateway.addImportantDate(
+                        title: clean,
+                        date: day,
+                        kind: UsImportantDate.Kind.custom.rawValue,
+                        accentHex: accent,
+                        systemImage: entry.systemImage,
+                        iconPreset: icon.rawValue
+                    )
+                    if let idx = importantDates.firstIndex(where: { $0.id == entry.id }) {
+                        importantDates[idx] = saved
+                    }
+                } catch {
+                    syncError = error.localizedDescription
+                }
+            }
+        }
         return true
     }
 
@@ -399,6 +425,12 @@ final class MeSessionStore {
     func deleteImportantDate(id: String) -> Bool {
         guard let idx = importantDates.firstIndex(where: { $0.id == id }) else { return false }
         importantDates.remove(at: idx)
+        if let gateway = liveGateway, let uuid = UUID(uuidString: id) {
+            Task {
+                do { try await gateway.deleteImportantDate(id: uuid) }
+                catch { syncError = error.localizedDescription }
+            }
+        }
         return true
     }
 
@@ -415,31 +447,57 @@ final class MeSessionStore {
         if let photoData, !photoData.isEmpty {
             photoURL = "data:image/jpeg;base64,\(photoData.base64EncodedString())"
         }
-        myWishlist.insert(
-            UsWishlistItem(id: "mw-\(UUID().uuidString)", caption: limited, photoURL: photoURL),
-            at: 0
-        )
+        let local = UsWishlistItem(id: "mw-\(UUID().uuidString)", caption: limited, photoURL: photoURL)
+        myWishlist.insert(local, at: 0)
+        if let gateway = liveGateway {
+            Task {
+                do {
+                    let saved = try await gateway.addWish(caption: limited, photoJPEG: photoData)
+                    if let idx = myWishlist.firstIndex(where: { $0.id == local.id }) {
+                        myWishlist[idx] = saved
+                    }
+                } catch {
+                    syncError = error.localizedDescription
+                }
+            }
+        }
         return true
     }
 
     func removeMyWish(at index: Int) {
         guard myWishlist.indices.contains(index) else { return }
-        myWishlist.remove(at: index)
+        let item = myWishlist.remove(at: index)
+        if let gateway = liveGateway, let uuid = UUID(uuidString: item.id) {
+            Task {
+                do { try await gateway.removeWish(id: uuid) }
+                catch { syncError = error.localizedDescription }
+            }
+        }
     }
 
     /// Move a mine wish into history as fulfilled by partner (`for_me`).
     func markMyWishDone(at index: Int) {
         guard myWishlist.indices.contains(index) else { return }
         let item = myWishlist.remove(at: index)
-        wishlistHistory.insert(
-            UsCompletedWish(
-                id: "done-\(UUID().uuidString)",
-                title: item.caption,
-                completedAt: Date(),
-                direction: .forMe
-            ),
-            at: 0
+        let done = UsCompletedWish(
+            id: "done-\(UUID().uuidString)",
+            title: item.caption,
+            completedAt: Date(),
+            direction: .forMe
         )
+        wishlistHistory.insert(done, at: 0)
+        if let gateway = liveGateway, let uuid = UUID(uuidString: item.id) {
+            Task {
+                do {
+                    let saved = try await gateway.markWishDone(id: uuid, title: item.caption)
+                    if let idx = wishlistHistory.firstIndex(where: { $0.id == done.id }) {
+                        wishlistHistory[idx] = saved
+                    }
+                } catch {
+                    syncError = error.localizedDescription
+                }
+            }
+        }
     }
 
     // MARK: - Love Notes
@@ -479,6 +537,18 @@ final class MeSessionStore {
             status: .sent
         )
         loveNotes.insert(note, at: 0)
+        if let gateway = liveGateway {
+            Task {
+                do {
+                    let saved = try await gateway.sendLoveNote(body: trimmed)
+                    if let idx = loveNotes.firstIndex(where: { $0.id == note.id }) {
+                        loveNotes[idx] = saved
+                    }
+                } catch {
+                    syncError = error.localizedDescription
+                }
+            }
+        }
         return true
     }
 
@@ -487,12 +557,24 @@ final class MeSessionStore {
         guard loveNotes[idx].direction == .incoming, loveNotes[idx].status == .sent else { return }
         loveNotes[idx].status = .read
         loveNotes[idx].readAt = Date()
+        if let gateway = liveGateway, let uuid = UUID(uuidString: id) {
+            Task {
+                do { try await gateway.markNoteRead(id: uuid) }
+                catch { syncError = error.localizedDescription }
+            }
+        }
     }
 
     @discardableResult
     func deleteLoveNote(id: String) -> Bool {
         guard let idx = loveNotes.firstIndex(where: { $0.id == id }) else { return false }
         loveNotes.remove(at: idx)
+        if let gateway = liveGateway, let uuid = UUID(uuidString: id) {
+            Task {
+                do { try await gateway.deleteLoveNote(id: uuid) }
+                catch { syncError = error.localizedDescription }
+            }
+        }
         return true
     }
 
@@ -551,6 +633,24 @@ final class MeSessionStore {
             addedByUser: true
         )
         sharedMemories.insert(memory, at: 0)
+        if let gateway = liveGateway {
+            Task {
+                do {
+                    let saved = try await gateway.addMemory(
+                        title: clean,
+                        description: cleanDescription,
+                        occurredAt: dateTime,
+                        mood: moodValue,
+                        photoJPEG: jpeg
+                    )
+                    if let idx = sharedMemories.firstIndex(where: { $0.id == memory.id }) {
+                        sharedMemories[idx] = saved
+                    }
+                } catch {
+                    syncError = error.localizedDescription
+                }
+            }
+        }
         return true
     }
 
@@ -584,6 +684,27 @@ final class MeSessionStore {
             sharedMemories[idx].photoData = jpeg
             sharedMemories[idx].photoURL = ""
         }
+        if let gateway = liveGateway, let uuid = UUID(uuidString: id) {
+            let jpeg = UsSharedMemories.normalizedJPEG(from: photoData)
+            Task {
+                do {
+                    let saved = try await gateway.updateMemory(
+                        id: uuid,
+                        title: clean,
+                        description: cleanDescription,
+                        occurredAt: dateTime,
+                        mood: moodValue,
+                        photoJPEG: jpeg,
+                        removePhoto: removePhoto
+                    )
+                    if let i = sharedMemories.firstIndex(where: { $0.id == id }) {
+                        sharedMemories[i] = saved
+                    }
+                } catch {
+                    syncError = error.localizedDescription
+                }
+            }
+        }
         return true
     }
 
@@ -591,6 +712,12 @@ final class MeSessionStore {
     func deleteSharedMemory(id: String) -> Bool {
         guard let idx = sharedMemories.firstIndex(where: { $0.id == id }) else { return false }
         sharedMemories.remove(at: idx)
+        if let gateway = liveGateway, let uuid = UUID(uuidString: id) {
+            Task {
+                do { try await gateway.deleteMemory(id: uuid) }
+                catch { syncError = error.localizedDescription }
+            }
+        }
         return true
     }
 
@@ -609,6 +736,17 @@ final class MeSessionStore {
 
     func completePairing() {
         isPaired = true
+    }
+
+    func applyCoupleContext(_ context: CoupleContext) {
+        displayName = context.displayName
+        if let partner = context.partnerDisplayName, !partner.isEmpty {
+            partnerDisplayName = partner
+        }
+        isPaired = context.isPaired
+        if let code = context.inviteCode, !code.isEmpty {
+            inviteCode = code
+        }
     }
 
     /// Both partners submitted non-empty answers — dialogue may reveal.
@@ -750,6 +888,17 @@ final class MeSessionStore {
         }
         applyUsLongTermPoints(points)
         partnerQuizRewardClaimed = true
+        if let gateway = liveGateway {
+            Task {
+                do {
+                    let result = try await gateway.addProgressPoints(points)
+                    usLongTermLevel = result.level
+                    usLongTermPoints = result.points
+                } catch {
+                    syncError = error.localizedDescription
+                }
+            }
+        }
         return points
     }
 
@@ -782,6 +931,18 @@ final class MeSessionStore {
         if connectionDailyPhase == .closed {
             connectionDailyPhase = .open
         }
+        if let gateway = liveGateway {
+            Task {
+                do {
+                    _ = try await gateway.ensureDailyRound(
+                        meTask: ConnectionCarousel.defaultUserTask,
+                        partnerTask: ConnectionCarousel.defaultPartnerTask
+                    )
+                } catch {
+                    syncError = error.localizedDescription
+                }
+            }
+        }
     }
 
     /// Submit your Question of the day answer; schedules a demo partner reply if needed.
@@ -790,7 +951,14 @@ final class MeSessionStore {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, meQuestionAnswer == nil else { return false }
         meQuestionAnswer = trimmed
-        scheduleDemoPartnerQuestionAnswerIfNeeded()
+        if let gateway = liveGateway {
+            Task {
+                do { try await gateway.submitQOTD(answer: trimmed) }
+                catch { syncError = error.localizedDescription }
+            }
+        } else {
+            scheduleDemoPartnerQuestionAnswerIfNeeded()
+        }
         return true
     }
 
@@ -815,8 +983,14 @@ final class MeSessionStore {
     func markDailyActivityDone() {
         connectionDailyPhase = .waiting
         meDailySubmittedToday = true
-        // Session demo: partner also marks done so their task appears for your approval.
-        scheduleDemoPartnerSubmitIfNeeded()
+        if let gateway = liveGateway {
+            Task {
+                do { try await gateway.markDailyDone(body: ConnectionCarousel.defaultUserTask) }
+                catch { syncError = error.localizedDescription }
+            }
+        } else {
+            scheduleDemoPartnerSubmitIfNeeded()
+        }
     }
 
     /// Partner tapped Mark as done — task awaits your approval; their chip stays Waiting until you Count it.
@@ -843,8 +1017,14 @@ final class MeSessionStore {
         guard let idx = connectionPendingAnswers.firstIndex(where: { $0.id == id }) else { return false }
         connectionPendingAnswers.remove(at: idx)
         partnerActivityDoneToday = true
-        // Session demo: partner approves your task next so You chip → Done and celebration can play.
-        scheduleDemoPartnerApprovesMeIfNeeded()
+        if let gateway = liveGateway, let uuid = UUID(uuidString: id) {
+            Task {
+                do { try await gateway.approveSubmission(id: uuid) }
+                catch { syncError = error.localizedDescription }
+            }
+        } else {
+            scheduleDemoPartnerApprovesMeIfNeeded()
+        }
         return true
     }
 
@@ -859,6 +1039,12 @@ final class MeSessionStore {
     func declinePendingAnswer(id: String) -> Bool {
         guard let idx = connectionPendingAnswers.firstIndex(where: { $0.id == id }) else { return false }
         connectionPendingAnswers.remove(at: idx)
+        if let gateway = liveGateway, let uuid = UUID(uuidString: id) {
+            Task {
+                do { try await gateway.declineSubmission(id: uuid) }
+                catch { syncError = error.localizedDescription }
+            }
+        }
         return true
     }
 
@@ -901,6 +1087,20 @@ final class MeSessionStore {
         }
         myReactionToPartner = reaction
         myNoteToPartner = limitedNote
+        if let gateway = liveGateway {
+            let shareId = partnerCurrentMood.id
+            Task {
+                do {
+                    try await gateway.reactToMood(
+                        shareId: shareId,
+                        reaction: reaction,
+                        note: limitedNote ?? ""
+                    )
+                } catch {
+                    syncError = error.localizedDescription
+                }
+            }
+        }
     }
 
     /// New partner share resets your reaction slot for that mood.
@@ -1033,6 +1233,22 @@ final class MeSessionStore {
 
         sharePhase = .sending
         activeAlert = nil
+        if let gateway = liveGateway {
+            do {
+                let entry = try await gateway.shareMood(moodID: moodID, wish: wish)
+                history.append(entry)
+                sharePhase = .sent
+                try? await Task.sleep(for: .seconds(1.2))
+                selectedMoodID = nil
+                selectedWish = nil
+                customWishText = ""
+                sharePhase = .idle
+            } catch {
+                syncError = error.localizedDescription
+                sharePhase = .idle
+            }
+            return
+        }
         try? await Task.sleep(for: .milliseconds(1200))
         let entry = SharedMood(moodID: moodID, wish: wish, timestamp: Date())
         history.append(entry)

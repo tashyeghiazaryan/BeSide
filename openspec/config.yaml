@@ -1,32 +1,23 @@
 schema: spec-driven
 
-# Project context (optional)
-# This is shown to AI when creating artifacts.
-# Add your tech stack, conventions, style guides, domain knowledge, etc.
-# Example:
-#   context: |
-#     Tech stack: TypeScript, React, Node.js
-#     We use conventional commits
-#     Domain: e-commerce platform
+context: |
+  BeSide is a native SwiftUI couple app (iOS 18+) under `beside/beside/`.
+  Open via `beside/beside.xcworkspace` (wraps `beside.xcodeproj`).
+  Domain state today lives in a single `@Observable` `MeSessionStore` (session-only demo).
+  Backend target: Supabase (Auth email OTP, Postgres + RLS, Storage, Realtime).
+  Design reference: `design-reference/` (Figma Make / React). Field QA checklist: `Требования полей.md`
+  (not OpenSpec truth — specs under `openspec/specs/` win).
+  Commit style: short imperative sentences (e.g. "Ship …", "Add …").
 
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always include a "Non-goals" section
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
-
-# Per-operation guidance (optional)
-# Add advisory guidance for how apply and archive work should be conducted.
-# This is separate from artifact rules above.
-# Example:
-#   operations:
-#     apply:
-#       guidance:
-#         - Keep test summaries concise
-#     archive:
-#       guidance:
-#         - Summarize the archive outcome before finishing
+rules:
+  proposal:
+    - Keep Why / What / Capabilities / Impact
+    - Call out Non-goals when the change is large
+  design:
+    - Document Decisions with alternatives considered
+    - Include Migration / Rollback notes for data or auth changes
+  tasks:
+    - Prefer phased checklists (auth → moods → us → connection)
+  specs:
+    - Spec deltas use full requirement text under ## ADDED / ## MODIFIED Requirements
+    - When replacing session-demo partner behavior, say whether DEBUG demo remains

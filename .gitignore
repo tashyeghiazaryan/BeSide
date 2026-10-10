@@ -25,6 +25,15 @@ playground.xcworkspace
 # Swift Package Manager
 .build/
 .swiftpm/
+beside/.spm/
+
+# Supabase local secrets (never commit anon/service keys)
+**/SupabaseSecrets.plist
+.env
+.env.*
+!.env.example
+supabase/.branches
+supabase/.temp
 
 # Cursor / IDE
 .cursor/
