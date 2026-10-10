@@ -6,11 +6,15 @@ struct ConnectionCarouselSlide: Identifiable, Equatable, Sendable {
     var body: String?
     var userTask: String?
     var partnerTask: String?
+    /// Local asset catalog name (preferred over `imageURL` when set).
+    var imageAssetName: String? = nil
     var imageURL: String?
 
     var isTodaysActivity: Bool { id == ConnectionCarousel.todaysActivityID }
 
     var isQuestionOfTheDay: Bool { id == ConnectionCarousel.questionOfTheDayID }
+
+    var isPartnerQuiz: Bool { id == ConnectionCarousel.partnerQuizID }
 
     var hasPairedTasks: Bool {
         userTask != nil && partnerTask != nil
@@ -27,6 +31,7 @@ enum QuestionOfTheDay {
 enum ConnectionCarousel {
     static let todaysActivityID = "todays-activity"
     static let questionOfTheDayID = "question-of-the-day"
+    static let partnerQuizID = "partner-quiz"
 
     static let defaultUserTask =
         "Send a short voice note: one thing you appreciated about your partner today, even if it was tiny."
@@ -61,10 +66,11 @@ enum ConnectionCarousel {
                 body: "One shared question for both of you. Answer privately—your replies open as a dialogue when you’ve both written something.",
                 userTask: nil,
                 partnerTask: nil,
-                imageURL: "https://images.unsplash.com/photo-1511632765486-a01980e01a18?\(portraitQuery)"
+                imageAssetName: "ConnectionQotDCouple",
+                imageURL: nil
             ),
             ConnectionCarouselSlide(
-                id: "partner-quiz",
+                id: partnerQuizID,
                 title: "How well do you know your partner?",
                 body: "Take a test now—playful questions to understand each other. One answers, the other guesses—or you both answer and compare at the end.",
                 userTask: nil,

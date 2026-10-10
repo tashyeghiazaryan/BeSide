@@ -335,6 +335,13 @@ final class besideUITests: XCTestCase {
         XCTAssertTrue(screen(app, "connection.sections.row.try-premium").waitForExistence(timeout: 2))
 
         screen(app, "connection.sections.open.partner-quiz").tap()
+        XCTAssertTrue(screen(app, "connection.quiz.hub").waitForExistence(timeout: 3))
+        XCTAssertTrue(screen(app, "tab.bar").waitForExistence(timeout: 2), "Tab bar stays visible (light) inside Partner Quiz")
+        screen(app, "connection.quiz.back").tap()
+
+        screen(app, "connection.sections").tap()
+        XCTAssertTrue(screen(app, "connection.sections.page").waitForExistence(timeout: 3))
+        screen(app, "connection.sections.open.try-premium").tap()
         XCTAssertTrue(screen(app, "connection.carousel").waitForExistence(timeout: 3))
         XCTAssertTrue(screen(app, "connection.cta.start").waitForExistence(timeout: 2))
 
@@ -342,13 +349,61 @@ final class besideUITests: XCTestCase {
         XCTAssertTrue(screen(app, "connection.sections.page").waitForExistence(timeout: 3))
         screen(app, "connection.sections.open.question-of-the-day").tap()
         XCTAssertTrue(screen(app, "connection.qotd.hub").waitForExistence(timeout: 3))
-        XCTAssertFalse(screen(app, "tab.bar").exists, "Tab bar should be hidden on Question of the day")
+        XCTAssertFalse(screen(app, "tab.bar").exists, "Tab bar should be hidden inside Question of the day")
         screen(app, "connection.qotd.back").tap()
 
         screen(app, "connection.sections").tap()
         XCTAssertTrue(screen(app, "connection.sections.page").waitForExistence(timeout: 3))
         screen(app, "connection.sections.open.todays-activity").tap()
         XCTAssertTrue(screen(app, "connection.activity.hub").waitForExistence(timeout: 3))
+    }
+
+    @MainActor
+    func testConnectionPartnerQuizFlow() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        screen(app, "tab.connection").tap()
+        XCTAssertTrue(screen(app, "connection.sections").waitForExistence(timeout: 5))
+        screen(app, "connection.sections").tap()
+        XCTAssertTrue(screen(app, "connection.sections.page").waitForExistence(timeout: 3))
+        screen(app, "connection.sections.open.partner-quiz").tap()
+
+        XCTAssertTrue(screen(app, "connection.quiz.hub").waitForExistence(timeout: 3))
+        XCTAssertTrue(screen(app, "connection.quiz.howto").waitForExistence(timeout: 2))
+        XCTAssertTrue(screen(app, "tab.bar").exists)
+        screen(app, "connection.quiz.play").tap()
+
+        XCTAssertTrue(screen(app, "connection.quiz.role").waitForExistence(timeout: 3))
+        screen(app, "connection.quiz.role.continue").tap()
+
+        XCTAssertTrue(screen(app, "connection.quiz.question").waitForExistence(timeout: 3))
+
+        // Seeded truths: coffee b, weekend b, love c, stress b → 3/4 = +30 pts.
+        let picks = ["b", "b", "c", "b"]
+        for optionID in picks {
+            let option = screen(app, "connection.quiz.option.\(optionID)")
+            XCTAssertTrue(option.waitForExistence(timeout: 2))
+            option.tap()
+            screen(app, "connection.quiz.continue").tap()
+        }
+
+        XCTAssertTrue(screen(app, "connection.quiz.results").waitForExistence(timeout: 3))
+        XCTAssertTrue(screen(app, "connection.quiz.score").exists)
+        XCTAssertTrue(screen(app, "connection.quiz.points").exists)
+        XCTAssertTrue(screen(app, "connection.quiz.result.pq-coffee").exists)
+
+        screen(app, "connection.quiz.done").tap()
+        XCTAssertTrue(screen(app, "connection.carousel").waitForExistence(timeout: 3))
+
+        screen(app, "tab.us").tap()
+        let level = screen(app, "us.level")
+        XCTAssertTrue(level.waitForExistence(timeout: 3))
+        // Seed starts at 420; +30 from quiz → 450 toward next level.
+        XCTAssertTrue(
+            level.label.contains("450"),
+            "Claim should add quiz points to Us level bar, got: \(level.label)"
+        )
     }
 
     @MainActor
@@ -365,7 +420,7 @@ final class besideUITests: XCTestCase {
         XCTAssertTrue(screen(app, "connection.qotd.hub").waitForExistence(timeout: 3))
         XCTAssertTrue(screen(app, "connection.qotd.question").exists)
         XCTAssertTrue(screen(app, "connection.qotd.composer").exists)
-        XCTAssertFalse(screen(app, "tab.bar").exists)
+        XCTAssertFalse(screen(app, "tab.bar").exists, "Tab bar should be hidden while answering Question of the day")
 
         let composer = screen(app, "connection.qotd.composer")
         composer.tap()

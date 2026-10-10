@@ -26,7 +26,7 @@ The Connection tab SHALL show a full-bleed media carousel (edge-to-edge under th
 - **THEN** a Question of the day slide is available among the seeded slides
 
 ### Requirement: Carousel Start action
-Tapping the centered CTA on the Today's Activity slide SHALL open the Today's Activity hub. Tapping Start on the Question of the day slide SHALL open the Question of the day hub. Tapping Start on other seeded slides (partner-quiz, Premium) MUST NOT open those hubs and MUST NOT navigate to quiz or Premium flows in this slice (no-op is allowed). Opening either hub from Sections SHALL behave the same as the matching carousel Start.
+Tapping the centered CTA on the Today's Activity slide SHALL open the Today's Activity hub. Tapping Start on the Question of the day slide SHALL open the Question of the day hub. Tapping Start on the partner-quiz slide SHALL open the Partner Quiz hub. Tapping Start on other seeded slides (Premium) MUST NOT open those hubs and MUST NOT navigate to Premium flows in this slice (no-op is allowed). Opening Today's Activity, Question of the day, or Partner Quiz from Sections SHALL behave the same as the matching carousel Start.
 
 #### Scenario: Open Today's Activity from carousel
 - **WHEN** the user taps the Today's Activity CTA
@@ -36,9 +36,13 @@ Tapping the centered CTA on the Today's Activity slide SHALL open the Today's Ac
 - **WHEN** the user taps Start on the Question of the day slide
 - **THEN** the Question of the day hub opens over the carousel
 
+#### Scenario: Open Partner Quiz from carousel
+- **WHEN** the user taps Start on the partner-quiz slide
+- **THEN** the Partner Quiz hub opens over the carousel
+
 #### Scenario: Other Start stays on carousel
-- **WHEN** the user taps Start on the partner-quiz or Premium slide
-- **THEN** neither the Today's Activity hub nor the Question of the day hub opens
+- **WHEN** the user taps Start on the Premium slide
+- **THEN** neither the Today's Activity hub, the Question of the day hub, nor the Partner Quiz hub opens
 
 ### Requirement: Today's Activity hub — Daily Task
 The Today's Activity hub SHALL be a full-screen soft canvas with Back, beside branding, and a Daily Task card. The Daily Task SHALL progress through closed → open → waiting: closed shows a hint and “Open your daily task”; open shows You/Partner task text and “Mark as done”; waiting shows a waiting-for-partner message. Marking done SHALL set the user's daily activity completion for the session (so Us daily progress can reflect it). Back SHALL dismiss the hub and return to the carousel.

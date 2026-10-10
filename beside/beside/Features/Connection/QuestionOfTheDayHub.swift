@@ -21,49 +21,61 @@ struct QuestionOfTheDayHub: View {
     }
 
     var body: some View {
-        ZStack {
-            background
+        // NavigationStack makes FocusState / keyboard reliable on Connection overlays
+        // (same pattern as LoveNoteComposeModal).
+        NavigationStack {
+            ZStack {
+                background
 
-            VStack(spacing: 0) {
-                header
+                VStack(spacing: 0) {
+                    header
 
-                ScrollView(.vertical, showsIndicators: false) {
-                    VStack(alignment: .leading, spacing: 18) {
-                        questionCard
-                        if store.bothQuestionAnswersReady {
-                            dialogue
-                        } else if store.hasMeQuestionAnswer {
-                            waitingState
+                    ScrollView(.vertical, showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 18) {
+                            questionCard
+                            if store.bothQuestionAnswersReady {
+                                dialogue
+                            } else if store.hasMeQuestionAnswer {
+                                waitingState
+                            }
                         }
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 10)
-                    .padding(.bottom, showsComposer ? 24 : 40)
-                }
-                .scrollDismissesKeyboard(.interactively)
-
-                if showsComposer {
-                    composerBar
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, 20)
                         .padding(.top, 10)
-                        .padding(.bottom, keyboardHeight > 0 ? keyboardHeight + 8 : 8)
-                        .safeAreaPadding(.bottom, keyboardHeight > 0 ? 0 : 8)
-                        .background {
-                            composerChrome
-                        }
+                        .padding(.bottom, showsComposer ? 24 : 32)
+                    }
+                    .scrollDismissesKeyboard(.interactively)
+                    .onTapGesture {
+                        // Tap outside the field dismisses keyboard without fighting focus.
+                        composerFocused = false
+                    }
+
+                    if showsComposer {
+                        composerBar
+                            .padding(.horizontal, 16)
+                            .padding(.top, 10)
+                            .padding(
+                                .bottom,
+                                keyboardHeight > 0
+                                    ? keyboardHeight + 8
+                                    : 12
+                            )
+                            .background {
+                                composerChrome
+                            }
+                            // Animate only the lift — not the whole hub (avoids sluggish first focus).
+                            .animation(.easeOut(duration: 0.2), value: keyboardHeight)
+                    }
                 }
             }
+            .toolbar(.hidden, for: .navigationBar)
+            .ignoresSafeArea(.keyboard)
         }
-        .ignoresSafeArea(.keyboard)
-        .animation(.easeOut(duration: 0.25), value: keyboardHeight)
         .hidesFloatingTabBar()
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillChangeFrameNotification)) { notification in
             updateKeyboardHeight(from: notification)
         }
         .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
-            withAnimation(.easeOut(duration: 0.25)) {
-                keyboardHeight = 0
-            }
+            keyboardHeight = 0
         }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier("connection.qotd.hub")
@@ -169,6 +181,8 @@ struct QuestionOfTheDayHub: View {
                             }
                     }
                     .focused($composerFocused)
+                    .textInputAutocapitalization(.sentences)
+                    .submitLabel(.return)
                     .accessibilityIdentifier("connection.qotd.composer")
 
                 Button {
@@ -306,9 +320,9 @@ struct QuestionOfTheDayHub: View {
         let overlap = max(0, screenHeight - frame.origin.y)
         let next = overlap > 80 ? overlap : 0
         guard next != keyboardHeight else { return }
-        withAnimation(.easeOut(duration: 0.25)) {
-            keyboardHeight = next
-        }
+        // Height is animated via the composer padding modifier — keep assignment plain
+        // so FocusState isn’t delayed by a nested withAnimation.
+        keyboardHeight = next
     }
 }
 

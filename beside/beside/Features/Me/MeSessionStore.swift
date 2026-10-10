@@ -97,6 +97,24 @@ final class MeSessionStore {
     var meQuestionAnswer: String?
     /// Partner's free-text answer (nil until they submit / demo arrives).
     var partnerQuestionAnswer: String?
+    /// Seeded Partner Quiz questions (partner truths locked).
+    var partnerQuizQuestions: [PartnerQuizQuestion]
+    /// Current question index while playing.
+    var partnerQuizIndex: Int
+    /// Selected option on the current question (not yet committed).
+    var partnerQuizSelectedOptionID: String?
+    /// Committed guesses: question id → option id.
+    var partnerQuizGuesses: [String: String]
+    /// How-to → role → playing → results.
+    var partnerQuizPhase: PartnerQuizPhase
+    /// Today's assigned role for this session round.
+    var partnerQuizRole: PartnerQuizRole
+    /// Whether Claim & Reconnect already applied this round's points to Us.
+    var partnerQuizRewardClaimed: Bool
+    /// Demo Premium flag (no real billing).
+    var isPremium: Bool
+    /// Optional Premium custom question — replaces seed slot 2 when set.
+    var customPartnerQuizQuestion: PartnerQuizQuestion?
     /// Important dates for Us (seeded + user-added this session).
     var importantDates: [UsImportantDate]
     /// My wishlist items (session-only).
@@ -234,6 +252,17 @@ final class MeSessionStore {
         self.questionOfTheDayPrompt = QuestionOfTheDay.defaultPrompt
         self.meQuestionAnswer = nil
         self.partnerQuestionAnswer = nil
+        self.partnerQuizQuestions = PartnerQuiz.demoSeed(partnerName: "Alex")
+        self.partnerQuizIndex = 0
+        self.partnerQuizSelectedOptionID = nil
+        self.partnerQuizGuesses = [:]
+        self.partnerQuizPhase = .howToPlay
+        // Demo seed: you guess; partner already answered (matches locked truths).
+        self.partnerQuizRole = .guessing
+        self.partnerQuizRewardClaimed = false
+        // Demo: start free; role screen can unlock Premium without billing.
+        self.isPremium = false
+        self.customPartnerQuizQuestion = nil
         self.importantDates = UsImportantDates.makeSeedDates(
             relationshipStart: relationshipStart,
             partnerName: "Alex"
@@ -591,6 +620,162 @@ final class MeSessionStore {
 
     var hasMeQuestionAnswer: Bool {
         !(meQuestionAnswer?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
+    }
+
+    var currentPartnerQuizQuestion: PartnerQuizQuestion? {
+        guard partnerQuizQuestions.indices.contains(partnerQuizIndex) else { return nil }
+        return partnerQuizQuestions[partnerQuizIndex]
+    }
+
+    var partnerQuizCorrectCount: Int {
+        partnerQuizQuestions.reduce(0) { count, question in
+            count + (partnerQuizGuesses[question.id] == question.partnerTruthOptionID ? 1 : 0)
+        }
+    }
+
+    var partnerQuizTotalCount: Int {
+        partnerQuizQuestions.count
+    }
+
+    /// Points earned this round from the assigned role.
+    var partnerQuizPointsEarned: Int {
+        switch partnerQuizRole {
+        case .answering:
+            return PartnerQuiz.truthCompletionPoints
+        case .guessing:
+            return partnerQuizCorrectCount * PartnerQuiz.pointsPerCorrectGuess
+        }
+    }
+
+    var canAdvancePartnerQuiz: Bool {
+        partnerQuizPhase == .playing && partnerQuizSelectedOptionID != nil
+    }
+
+    func selectPartnerQuizOption(_ optionID: String) {
+        guard partnerQuizPhase == .playing,
+              let question = currentPartnerQuizQuestion,
+              question.options.contains(where: { $0.id == optionID })
+        else { return }
+        partnerQuizSelectedOptionID = optionID
+    }
+
+    /// Commit the current selection and move to the next question or results.
+    @discardableResult
+    func advancePartnerQuiz() -> Bool {
+        guard partnerQuizPhase == .playing,
+              let question = currentPartnerQuizQuestion,
+              let selected = partnerQuizSelectedOptionID
+        else { return false }
+        partnerQuizGuesses[question.id] = selected
+        partnerQuizSelectedOptionID = nil
+        if partnerQuizIndex + 1 >= partnerQuizQuestions.count {
+            partnerQuizPhase = .results
+        } else {
+            partnerQuizIndex += 1
+        }
+        return true
+    }
+
+    /// Assign today's roles and show the reveal screen.
+    func startPartnerQuiz() {
+        partnerQuizIndex = 0
+        partnerQuizSelectedOptionID = nil
+        partnerQuizGuesses = [:]
+        partnerQuizRewardClaimed = false
+        rebuildPartnerQuizDeck()
+        // Demo: always guesser this session (partner truths are pre-seeded).
+        partnerQuizRole = .guessing
+        partnerQuizPhase = .roleReveal
+    }
+
+    /// Leave the role screen and start the question deck.
+    func beginPartnerQuizQuestions() {
+        guard partnerQuizPhase == .roleReveal else { return }
+        rebuildPartnerQuizDeck()
+        partnerQuizPhase = .playing
+    }
+
+    func resetPartnerQuiz() {
+        partnerQuizIndex = 0
+        partnerQuizSelectedOptionID = nil
+        partnerQuizGuesses = [:]
+        partnerQuizRewardClaimed = false
+        partnerQuizPhase = .howToPlay
+    }
+
+    /// Demo-only Premium unlock (no StoreKit / paywall).
+    func unlockDemoPremium() {
+        isPremium = true
+    }
+
+    /// Save a Premium custom question; replaces seed slot 2 in today's deck.
+    @discardableResult
+    func saveCustomPartnerQuizQuestion(
+        prompt: String,
+        optionTexts: [String],
+        truthOptionID: String
+    ) -> Bool {
+        guard isPremium,
+              let question = PartnerQuiz.makeCustomQuestion(
+                prompt: prompt,
+                optionTexts: optionTexts,
+                truthOptionID: truthOptionID
+              )
+        else { return false }
+        customPartnerQuizQuestion = question
+        rebuildPartnerQuizDeck()
+        return true
+    }
+
+    func clearCustomPartnerQuizQuestion() {
+        customPartnerQuizQuestion = nil
+        rebuildPartnerQuizDeck()
+    }
+
+    private func rebuildPartnerQuizDeck() {
+        partnerQuizQuestions = PartnerQuiz.demoSeed(
+            partnerName: partnerDisplayName,
+            customQuestion: customPartnerQuizQuestion
+        )
+    }
+
+    /// Apply this round's points to the Us long-term progress bar (once per round).
+    @discardableResult
+    func claimPartnerQuizReward() -> Int {
+        guard partnerQuizPhase == .results, !partnerQuizRewardClaimed else { return 0 }
+        let points = partnerQuizPointsEarned
+        guard points > 0 else {
+            partnerQuizRewardClaimed = true
+            return 0
+        }
+        applyUsLongTermPoints(points)
+        partnerQuizRewardClaimed = true
+        return points
+    }
+
+    /// Add points toward the next Us level, rolling over on level-up.
+    private func applyUsLongTermPoints(_ amount: Int) {
+        guard amount > 0 else { return }
+        var remaining = amount
+        while remaining > 0 {
+            let goal = UsLongTermLevels.pointsToNext(for: usLongTermLevel)
+            if goal <= 0 {
+                usLongTermPoints += remaining
+                break
+            }
+            let room = goal - usLongTermPoints
+            if remaining < room {
+                usLongTermPoints += remaining
+                break
+            }
+            remaining -= room
+            usLongTermLevel = min(30, usLongTermLevel + 1)
+            usLongTermPoints = 0
+            if usLongTermLevel >= 30 {
+                usLongTermPoints += remaining
+                break
+            }
+        }
     }
 
     func openConnectionDailyTask() {

@@ -5,6 +5,7 @@ struct RootTabView: View {
     @State private var meStore = MeSessionStore()
     @State private var isKeyboardVisible = false
     @State private var hideFloatingTabBar = false
+    @State private var darkFloatingTabBar = false
 
     private var showFloatingTabBar: Bool {
         !isKeyboardVisible && !hideFloatingTabBar
@@ -16,7 +17,7 @@ struct RootTabView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             if showFloatingTabBar {
-                FloatingTabBar(selection: $selection)
+                FloatingTabBar(selection: $selection, useDarkChrome: darkFloatingTabBar)
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .bottom)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -27,7 +28,9 @@ struct RootTabView: View {
         .ignoresSafeArea(.keyboard)
         .animation(.easeOut(duration: 0.25), value: isKeyboardVisible)
         .animation(.easeOut(duration: 0.25), value: hideFloatingTabBar)
+        .animation(.easeOut(duration: 0.25), value: darkFloatingTabBar)
         .onPreferenceChange(HideFloatingTabBarKey.self) { hideFloatingTabBar = $0 }
+        .onPreferenceChange(DarkFloatingTabBarKey.self) { darkFloatingTabBar = $0 }
         .onReceive(KeyboardVisibility.publisher) { visible in
             isKeyboardVisible = visible
         }

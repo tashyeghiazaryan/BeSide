@@ -14,9 +14,12 @@ enum BeSideColor {
     static let wishTextIdle = Color(hex: 0x666666)
     static let shareIdleText = Color(hex: 0x444444)
 
-    /// Floating tab bar (Figma Make gray-900 / gray-400@55%).
+    /// Floating tab bar on light canvases (Figma Make gray-900 / gray-400@55%).
     static let tabActive = Color(hex: 0x111827)
     static let tabInactive = Color(hex: 0x9CA3AF).opacity(0.55)
+    /// Tab / chrome labels on dark Connection chrome.
+    static let tabActiveOnDark = Color.white.opacity(0.95)
+    static let tabInactiveOnDark = Color.white.opacity(0.45)
 
     /// Auth Continue / primary CTA navy (Figma Make).
     static let navyStart = Color(hex: 0x1A1A2E)

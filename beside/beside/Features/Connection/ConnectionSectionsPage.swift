@@ -126,18 +126,14 @@ struct ConnectionSectionsPage: View {
                     } label: {
                         HStack(spacing: 6) {
                             Text("Open")
-                                .font(.system(size: 13, weight: .semibold))
+                                .font(.system(size: 14, weight: .semibold))
                             Image(systemName: "arrow.right")
                                 .font(.system(size: 12, weight: .bold))
                         }
-                        .foregroundStyle(ink.opacity(0.88))
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background {
-                            Capsule()
-                                .fill(Color.white)
-                                .shadow(color: .black.opacity(0.22), radius: 8, y: 2)
-                        }
+                        .foregroundStyle(BeSideColor.tabActive)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .beSideGlassChrome(cornerRadius: BeSideMetrics.tabBarItemCorner, style: .solidOnDark)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Open \(slide.title ?? "section")")
@@ -168,7 +164,11 @@ struct ConnectionSectionsPage: View {
     @ViewBuilder
     private func previewImage(_ slide: ConnectionCarouselSlide) -> some View {
         Group {
-            if let urlString = slide.imageURL, let url = URL(string: urlString) {
+            if let assetName = slide.imageAssetName {
+                Image(assetName)
+                    .resizable()
+                    .scaledToFill()
+            } else if let urlString = slide.imageURL, let url = URL(string: urlString) {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):

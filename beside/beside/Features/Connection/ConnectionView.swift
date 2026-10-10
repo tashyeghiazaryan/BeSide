@@ -8,6 +8,7 @@ struct ConnectionView: View {
     @State private var carouselIndex = 0
     @State private var showTodaysActivity = false
     @State private var showQuestionOfTheDay = false
+    @State private var showPartnerQuiz = false
     @State private var showSections = false
     @State private var autoAdvanceToken = UUID()
 
@@ -24,7 +25,7 @@ struct ConnectionView: View {
     }
 
     private var isOverlayOpen: Bool {
-        showTodaysActivity || showQuestionOfTheDay || showSections
+        showTodaysActivity || showQuestionOfTheDay || showPartnerQuiz || showSections
     }
 
     private var activitySlide: ConnectionCarouselSlide {
@@ -68,6 +69,20 @@ struct ConnectionView: View {
                 .zIndex(10)
             }
 
+            if showPartnerQuiz {
+                PartnerQuizHub(
+                    store: store,
+                    onClose: {
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            showPartnerQuiz = false
+                        }
+                        bumpAutoAdvance()
+                    }
+                )
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
+                .zIndex(10)
+            }
+
             if showSections {
                 ConnectionSectionsPage(
                     slides: slides,
@@ -86,6 +101,7 @@ struct ConnectionView: View {
         .background(Color(hex: 0x0A0A0A).ignoresSafeArea())
         .animation(.easeOut(duration: 0.28), value: showTodaysActivity)
         .animation(.easeOut(duration: 0.28), value: showQuestionOfTheDay)
+        .animation(.easeOut(duration: 0.28), value: showPartnerQuiz)
         .animation(.easeOut(duration: 0.28), value: showSections)
         .onAppear { bumpAutoAdvance() }
         .onChange(of: showTodaysActivity) { _, open in
@@ -94,12 +110,17 @@ struct ConnectionView: View {
         .onChange(of: showQuestionOfTheDay) { _, open in
             if !open { bumpAutoAdvance() }
         }
+        .onChange(of: showPartnerQuiz) { _, open in
+            if !open { bumpAutoAdvance() }
+        }
         .onChange(of: showSections) { _, open in
             if !open { bumpAutoAdvance() }
         }
         .onChange(of: autoAdvanceToken) { _, token in
             scheduleAutoAdvance(token: token)
         }
+        // Dark tab chrome only over the carousel; light bar inside hubs / Sections.
+        .prefersDarkFloatingTabBar(!isOverlayOpen)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(AppTab.connection.screenIdentifier)
     }
@@ -187,22 +208,16 @@ struct ConnectionView: View {
         HStack(spacing: 8) {
             Image(systemName: "sparkle")
                 .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Color.white.opacity(0.75))
+                .foregroundStyle(BeSideColor.tabActiveOnDark.opacity(0.85))
             Text("Connection")
                 .font(.system(size: 10, weight: .light))
                 .tracking(2.2)
                 .textCase(.uppercase)
-                .foregroundStyle(Color.white.opacity(0.85))
+                .foregroundStyle(BeSideColor.tabActiveOnDark)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background {
-            Capsule()
-                .fill(Color.black.opacity(0.3))
-                .overlay {
-                    Capsule().stroke(Color.white.opacity(0.15), lineWidth: 1)
-                }
-        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .beSideGlassChrome(cornerRadius: 20, style: .dark)
         .accessibilityElement(children: .combine)
         .accessibilityIdentifier("connection.pill")
     }
@@ -215,15 +230,9 @@ struct ConnectionView: View {
         } label: {
             Image(systemName: "square.grid.2x2")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color.white.opacity(0.9))
+                .foregroundStyle(BeSideColor.tabActiveOnDark)
                 .frame(width: 40, height: 40)
-                .background {
-                    Circle()
-                        .fill(Color.black.opacity(0.35))
-                        .overlay {
-                            Circle().stroke(Color.white.opacity(0.2), lineWidth: 1)
-                        }
-                }
+                .beSideGlassChrome(cornerRadius: 20, style: .dark)
         }
         .buttonStyle(.plain)
         .accessibilityLabel("Connection sections")
@@ -251,22 +260,24 @@ struct ConnectionView: View {
     }
 
     private var slideCopy: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 14) {
             if let title = currentSlide.title {
                 Text(title)
-                    .font(.system(size: 18, weight: .semibold))
+                    .font(.system(size: 28, weight: .semibold))
                     .foregroundStyle(Color.white)
-                    .shadow(color: .black.opacity(0.45), radius: 8, y: 1)
+                    .shadow(color: .black.opacity(0.5), radius: 10, y: 1)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if let body = currentSlide.body {
                 Text(body)
-                    .font(.system(size: 14, weight: .regular))
-                    .foregroundStyle(Color.white.opacity(0.88))
-                    .shadow(color: .black.opacity(0.4), radius: 6, y: 1)
+                    .font(.system(size: 17, weight: .regular))
+                    .foregroundStyle(Color.white.opacity(0.92))
+                    .lineSpacing(3)
+                    .shadow(color: .black.opacity(0.45), radius: 8, y: 1)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .frame(maxWidth: 336, alignment: .leading)
+        .frame(maxWidth: 360, alignment: .leading)
         .accessibilityIdentifier("connection.slide.copy")
     }
 
@@ -275,15 +286,11 @@ struct ConnectionView: View {
             handleStart()
         } label: {
             Text(currentSlide.isTodaysActivity ? "Open your task for today!" : "Start")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Color(hex: 0x171717))
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(BeSideColor.tabActive)
                 .padding(.horizontal, 28)
-                .padding(.vertical, 11)
-                .background {
-                    Capsule()
-                        .fill(Color.white)
-                        .shadow(color: .black.opacity(0.35), radius: 16, y: 4)
-                }
+                .padding(.vertical, 14)
+                .beSideGlassChrome(cornerRadius: BeSideMetrics.tabBarCorner, style: .solidOnDark)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(startAccessibilityID)
@@ -292,13 +299,19 @@ struct ConnectionView: View {
     private var startAccessibilityID: String {
         if currentSlide.isTodaysActivity { return "connection.cta.activity" }
         if currentSlide.isQuestionOfTheDay { return "connection.cta.qotd" }
+        if currentSlide.isPartnerQuiz { return "connection.cta.quiz" }
         return "connection.cta.start"
     }
 
     @ViewBuilder
     private func slideMedia(_ slide: ConnectionCarouselSlide, size: CGSize) -> some View {
         Group {
-            if let urlString = slide.imageURL, let url = URL(string: urlString) {
+            if let assetName = slide.imageAssetName {
+                Image(assetName)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: size.width, height: size.height)
+            } else if let urlString = slide.imageURL, let url = URL(string: urlString) {
                 AsyncImage(url: url) { phase in
                     switch phase {
                     case .success(let image):
@@ -351,6 +364,12 @@ struct ConnectionView: View {
             withAnimation(.easeOut(duration: 0.28)) {
                 showQuestionOfTheDay = true
             }
+            return
+        }
+        if currentSlide.isPartnerQuiz {
+            withAnimation(.easeOut(duration: 0.28)) {
+                showPartnerQuiz = true
+            }
         }
     }
 
@@ -363,8 +382,9 @@ struct ConnectionView: View {
             showSections = false
             showTodaysActivity = slide.isTodaysActivity
             showQuestionOfTheDay = slide.isQuestionOfTheDay
+            showPartnerQuiz = slide.isPartnerQuiz
         }
-        if !slide.isTodaysActivity && !slide.isQuestionOfTheDay {
+        if !slide.isTodaysActivity && !slide.isQuestionOfTheDay && !slide.isPartnerQuiz {
             bumpAutoAdvance()
         }
     }
