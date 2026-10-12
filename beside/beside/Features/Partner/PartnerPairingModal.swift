@@ -1,10 +1,17 @@
 import SwiftUI
 import UIKit
 
+enum PartnerPairingStartStep: Equatable {
+    case choose
+    case invite
+    case join
+}
+
 /// Non-dismissible invite / join overlay from Figma Make Partner.
 struct PartnerPairingModal: View {
     let inviteCode: String
     var usesLiveBackend: Bool = false
+    var initialStep: PartnerPairingStartStep = .choose
     var onCreateInvite: (() async throws -> String)?
     var onJoin: ((String) async throws -> Void)?
     var onRefresh: (() async -> Void)?
@@ -17,12 +24,37 @@ struct PartnerPairingModal: View {
         case join
     }
 
-    @State private var step: Step = .choose
+    @State private var step: Step
     @State private var joinCode = ""
     @State private var codeCopied = false
     @State private var displayedInviteCode: String = ""
     @State private var isWorking = false
     @State private var errorMessage: String?
+    @State private var didAutoStartInvite = false
+
+    init(
+        inviteCode: String,
+        usesLiveBackend: Bool = false,
+        initialStep: PartnerPairingStartStep = .choose,
+        onCreateInvite: (() async throws -> String)? = nil,
+        onJoin: ((String) async throws -> Void)? = nil,
+        onRefresh: (() async -> Void)? = nil,
+        onPaired: @escaping () -> Void
+    ) {
+        self.inviteCode = inviteCode
+        self.usesLiveBackend = usesLiveBackend
+        self.initialStep = initialStep
+        self.onCreateInvite = onCreateInvite
+        self.onJoin = onJoin
+        self.onRefresh = onRefresh
+        self.onPaired = onPaired
+        let mapped: Step = switch initialStep {
+        case .choose: .choose
+        case .invite: .invite
+        case .join: .join
+        }
+        _step = State(initialValue: mapped)
+    }
 
     var body: some View {
         ZStack {
@@ -45,6 +77,10 @@ struct PartnerPairingModal: View {
         .accessibilityIdentifier("partner.pairing.modal")
         .onAppear {
             displayedInviteCode = inviteCode
+            if initialStep == .invite, !didAutoStartInvite {
+                didAutoStartInvite = true
+                Task { await startInvite() }
+            }
         }
         .onChange(of: inviteCode) { _, newValue in
             if !newValue.isEmpty {
@@ -365,13 +401,15 @@ struct PartnerPairingModal: View {
             .opacity(joinCode.trimmingCharacters(in: .whitespacesAndNewlines).count < 4 ? 0.5 : 1)
             .accessibilityIdentifier("partner.pair.join.confirm")
 
-            Button("Back") {
-                errorMessage = nil
-                step = .choose
+            if initialStep != .join {
+                Button("Back") {
+                    errorMessage = nil
+                    step = .choose
+                }
+                .font(.system(size: 11, weight: .light))
+                .foregroundStyle(Color.gray.opacity(0.55))
+                .buttonStyle(.plain)
             }
-            .font(.system(size: 11, weight: .light))
-            .foregroundStyle(Color.gray.opacity(0.55))
-            .buttonStyle(.plain)
         }
     }
 

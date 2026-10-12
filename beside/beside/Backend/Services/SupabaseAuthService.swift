@@ -33,6 +33,28 @@ final class SupabaseAuthService: AuthService, @unchecked Sendable {
         }
     }
 
+    func currentSessionEmail() async -> String? {
+        do {
+            let email = try await client.auth.session.user.email
+            let trimmed = email?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+            return trimmed.isEmpty ? nil : trimmed
+        } catch {
+            return nil
+        }
+    }
+
+    func updateEmail(_ email: String) async throws {
+        let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.contains("@"), trimmed.contains(".") else {
+            throw AuthServiceError.invalidEmail
+        }
+        do {
+            try await client.auth.update(user: UserAttributes(email: trimmed))
+        } catch {
+            throw AuthServiceError.underlying(error.localizedDescription)
+        }
+    }
+
     func signInWithOTP(email: String) async throws {
         let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
         guard trimmed.contains("@"), trimmed.contains(".") else {

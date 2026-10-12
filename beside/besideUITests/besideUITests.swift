@@ -440,6 +440,45 @@ final class besideUITests: XCTestCase {
     }
 
     @MainActor
+    func testMoreScreenProfileAndPremium() throws {
+        let app = XCUIApplication()
+        app.launch()
+
+        screen(app, "tab.more").tap()
+        XCTAssertTrue(screen(app, "screen.more").waitForExistence(timeout: 5))
+        XCTAssertTrue(screen(app, "more.profile").waitForExistence(timeout: 2))
+        XCTAssertTrue(screen(app, "more.profile.name").exists)
+        XCTAssertTrue(screen(app, "more.profile.plan").exists)
+
+        // Demo starts on Free plan — unlock Premium from Subscription.
+        let plan = screen(app, "more.profile.plan")
+        if plan.label.contains("Free") {
+            screen(app, "more.subscription").tap()
+            let updated = screen(app, "more.profile.plan")
+            XCTAssertTrue(updated.waitForExistence(timeout: 2))
+            XCTAssertTrue(
+                updated.label.contains("Premium"),
+                "Try Premium should mark the session Premium, got: \(updated.label)"
+            )
+        }
+
+        screen(app, "more.profile.edit").tap()
+        XCTAssertTrue(screen(app, "more.profile.edit.sheet").waitForExistence(timeout: 2))
+        XCTAssertTrue(screen(app, "more.profile.edit.name").exists)
+        XCTAssertTrue(screen(app, "more.profile.edit.email").exists)
+        app.buttons["Cancel"].tap()
+        XCTAssertTrue(screen(app, "more.profile").waitForExistence(timeout: 2))
+
+        // Demo starts paired — My partner sheet with disconnect.
+        XCTAssertTrue(screen(app, "more.partner.open").waitForExistence(timeout: 2))
+        screen(app, "more.partner.open").tap()
+        XCTAssertTrue(screen(app, "more.partner.sheet").waitForExistence(timeout: 2))
+        XCTAssertTrue(screen(app, "more.partner.disconnect").exists)
+        app.buttons["Done"].tap()
+        XCTAssertTrue(screen(app, "more.profile").waitForExistence(timeout: 2))
+    }
+
+    @MainActor
     func testLaunchPerformance() throws {
         measure(metrics: [XCTApplicationLaunchMetric()]) {
             XCUIApplication().launch()

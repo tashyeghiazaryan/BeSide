@@ -80,6 +80,13 @@ extension MeSessionStore {
         connectionDailyPhase = snapshot.dailyPhase
         myReactionToPartner = snapshot.myReactionToPartner
         myNoteToPartner = snapshot.myNoteToPartner
+        if let jpeg = snapshot.meAvatarJPEG {
+            meAvatarJPEG = jpeg
+            AvatarDiskCache.save(jpeg)
+        }
+        if let jpeg = snapshot.partnerAvatarJPEG {
+            partnerAvatarJPEG = jpeg
+        }
         refreshNotificationSources()
     }
 

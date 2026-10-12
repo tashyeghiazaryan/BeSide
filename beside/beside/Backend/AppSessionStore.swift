@@ -14,6 +14,8 @@ final class AppSessionStore {
     var phase: AppSessionPhase = .loading
     var coupleContext: CoupleContext?
     var lastError: String?
+    /// Demo / cached account email for Edit profile.
+    var accountEmail: String = "anna@beside.app"
 
     private let auth: AuthService?
     private let couples: CoupleService?
@@ -58,6 +60,7 @@ final class AppSessionStore {
         }
 
         await refreshCoupleContext()
+        await refreshAccountEmail()
         phase = .authenticated
     }
 
@@ -72,6 +75,7 @@ final class AppSessionStore {
         lastError = nil
         try await auth.verifyOTP(email: email, token: token)
         await refreshCoupleContext()
+        await refreshAccountEmail()
         phase = .authenticated
     }
 
@@ -90,7 +94,52 @@ final class AppSessionStore {
             )
         }
         await refreshCoupleContext()
+        await refreshAccountEmail()
         phase = .authenticated
+    }
+
+    func updateAccountEmail(_ email: String) async throws {
+        let trimmed = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.contains("@"), trimmed.contains(".") else {
+            throw AuthServiceError.invalidEmail
+        }
+        if let auth, usesLiveBackend {
+            try await auth.updateEmail(trimmed)
+        }
+        accountEmail = trimmed
+    }
+
+    func updateDisplayName(_ displayName: String) async throws {
+        let trimmed = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw CoupleServiceError.underlying("Name can’t be empty.")
+        }
+        if let couples, usesLiveBackend {
+            try await couples.updateDisplayName(trimmed)
+            await refreshCoupleContext()
+        } else if var context = coupleContext {
+            context.displayName = trimmed
+            coupleContext = context
+        }
+    }
+
+    func leaveCouple() async throws {
+        if let couples, usesLiveBackend {
+            try await couples.leaveCouple()
+            await refreshCoupleContext()
+        } else if var context = coupleContext {
+            context.coupleId = nil
+            context.partnerUserId = nil
+            context.partnerDisplayName = nil
+            context.inviteCode = nil
+            coupleContext = context
+        }
+    }
+
+    func setRelationshipStart(_ date: Date) async throws {
+        if let couples, usesLiveBackend {
+            try await couples.setRelationshipStart(date)
+        }
     }
 
     func signOut() async {
@@ -98,6 +147,12 @@ final class AppSessionStore {
         try? await auth?.signOut()
         coupleContext = nil
         phase = usesLiveBackend ? .needsAuth : .demo
+    }
+
+    private func refreshAccountEmail() async {
+        if let email = await auth?.currentSessionEmail(), !email.isEmpty {
+            accountEmail = email
+        }
     }
 
     func createCouple(displayName: String) async throws -> String {

@@ -50,7 +50,7 @@ struct RootTabView: View {
         case .connection:
             ConnectionView(store: meStore)
         case .more:
-            MoreView()
+            MoreView(store: meStore, session: session)
         }
     }
 }

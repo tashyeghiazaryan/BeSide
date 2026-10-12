@@ -63,6 +63,20 @@ enum BeSideBackground {
         )
     }
 
+    /// Auth / More shell — `from-gray-50 via-white to-gray-100` (Figma AuthScreen).
+    static var authCanvas: LinearGradient {
+        LinearGradient(
+            colors: [Color(hex: 0xF9FAFB), Color.white, Color(hex: 0xF3F4F6)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    /// Auth / More ambient — pink–violet + mint–blue blurs (Figma AuthScreen).
+    static func authAmbientBlobs() -> some View {
+        activityAmbientBlobs()
+    }
+
     /// Pink / mint ambient blurs for Connection activity surfaces.
     static func activityAmbientBlobs() -> some View {
         ZStack {

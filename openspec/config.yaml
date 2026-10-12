@@ -5,6 +5,8 @@ context: |
   Open via `beside/beside.xcworkspace` (wraps `beside.xcodeproj`).
   Domain state today lives in a single `@Observable` `MeSessionStore` (session-only demo).
   Backend target: Supabase (Auth email OTP, Postgres + RLS, Storage, Realtime).
+  When frontend logic/data contracts change, update Supabase (migrations/RPCs/RLS)
+  and live Swift gateway code in the same change — not UI-only.
   Design reference: `design-reference/` (Figma Make / React). Field QA checklist: `Требования полей.md`
   (not OpenSpec truth — specs under `openspec/specs/` win).
   Commit style: short imperative sentences (e.g. "Ship …", "Add …").

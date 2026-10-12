@@ -6,6 +6,8 @@ import Supabase
 final class CoupleBackendGateway {
     let client: SupabaseClient
     private(set) var context: CoupleContext
+    /// Avoid re-downloading the same avatar path on every poll.
+    private var avatarJPEGCache: [String: Data] = [:]
 
     init(client: SupabaseClient, context: CoupleContext) {
         self.client = client
@@ -51,6 +53,8 @@ final class CoupleBackendGateway {
         var dailyPhase: ConnectionDailyPhase
         var myReactionToPartner: String?
         var myNoteToPartner: String?
+        var meAvatarJPEG: Data?
+        var partnerAvatarJPEG: Data?
     }
 
     func loadSnapshot() async throws -> Snapshot {
@@ -194,6 +198,7 @@ final class CoupleBackendGateway {
         let myWishlist = await resolveWishlist(wishRows.filter { $0.owner_user_id == context.userId })
         let partnerWishlist = await resolveWishlist(wishRows.filter { $0.owner_user_id != context.userId })
         let sharedMemories = await resolveMemories(memoryRows)
+        let avatars = await loadAvatarJPEGs()
 
         return Snapshot(
             myShares: myShares,
@@ -218,8 +223,101 @@ final class CoupleBackendGateway {
             pendingAnswers: pending,
             dailyPhase: phase,
             myReactionToPartner: myReaction,
-            myNoteToPartner: myNote
+            myNoteToPartner: myNote,
+            meAvatarJPEG: avatars.me,
+            partnerAvatarJPEG: avatars.partner
         )
+    }
+
+    // MARK: - Avatars
+
+    func updateMyDisplayName(_ displayName: String) async throws {
+        let trimmed = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw CoupleServiceError.underlying("Name can’t be empty.")
+        }
+        try await client
+            .rpc("ensure_profile", params: ["p_display_name": trimmed])
+            .execute()
+        context.displayName = trimmed
+    }
+
+    func setRelationshipStartDate(_ date: Date) async throws {
+        let day = Self.dayString(date)
+        try await client
+            .rpc("set_relationship_start", params: ["p_date": day])
+            .execute()
+    }
+
+    func leaveCouple() async throws {
+        try await client.rpc("leave_couple").execute()
+        context.coupleId = nil
+        context.partnerUserId = nil
+        context.partnerDisplayName = nil
+        context.inviteCode = nil
+    }
+
+    /// Uploads JPEG to `avatars/{userId}/avatar.jpg` and stores the path on `profiles.avatar_url`.
+    func uploadMyAvatar(jpeg: Data) async throws {
+        let path = "\(context.userId.uuidString)/avatar.jpg"
+        try await client.storage
+            .from("avatars")
+            .upload(path, data: jpeg, options: .init(contentType: "image/jpeg", upsert: true))
+        avatarJPEGCache[path] = jpeg
+        struct Patch: Encodable {
+            let avatar_url: String
+        }
+        try await client
+            .from("profiles")
+            .update(Patch(avatar_url: path))
+            .eq("id", value: context.userId)
+            .execute()
+    }
+
+    private struct ProfileAvatarRow: Decodable {
+        let id: UUID
+        let avatar_url: String?
+    }
+
+    private func loadAvatarJPEGs() async -> (me: Data?, partner: Data?) {
+        var ids = [context.userId]
+        if let partner = context.partnerUserId {
+            ids.append(partner)
+        }
+        let rows: [ProfileAvatarRow]
+        do {
+            rows = try await client
+                .from("profiles")
+                .select("id, avatar_url")
+                .in("id", values: ids.map(\.uuidString))
+                .execute()
+                .value
+        } catch {
+            return (nil, nil)
+        }
+        var me: Data?
+        var partner: Data?
+        for row in rows {
+            guard let path = row.avatar_url, !path.isEmpty else { continue }
+            let data = await downloadAvatar(path: path)
+            if row.id == context.userId {
+                me = data
+            } else {
+                partner = data
+            }
+        }
+        return (me, partner)
+    }
+
+    private func downloadAvatar(path: String) async -> Data? {
+        if let cached = avatarJPEGCache[path] { return cached }
+        do {
+            let data = try await client.storage.from("avatars").download(path: path)
+            avatarJPEGCache[path] = data
+            return data
+        } catch {
+            return nil
+        }
     }
 
     private func signedURL(bucket: String, path: String) async -> String {

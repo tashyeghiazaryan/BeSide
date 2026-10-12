@@ -9,6 +9,12 @@ struct AuthGateView: View {
         case otp
     }
 
+    private enum Field: Hashable {
+        case email
+        case otp
+        case password
+    }
+
     @State private var step: Step = .email
     @State private var email = ""
     @State private var otp = ""
@@ -16,32 +22,28 @@ struct AuthGateView: View {
     @State private var showPasswordDev = false
     @State private var errorMessage: String?
     @State private var isWorking = false
+    @FocusState private var focusedField: Field?
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                colors: [
-                    Color(hex: 0xF7F1F4),
-                    Color(hex: 0xE8E4F0),
-                    Color(hex: 0xDCE6F4),
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
+            BeSideBackground.authCanvas.ignoresSafeArea()
+            BeSideBackground.authAmbientBlobs()
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
 
             VStack(spacing: 0) {
-                Spacer(minLength: 48)
+                Spacer(minLength: focusedField == nil ? 48 : 24)
 
                 Text("beside")
-                    .font(.system(size: 42, weight: .ultraLight))
+                    .font(.system(size: focusedField == nil ? 42 : 32, weight: .ultraLight))
+                    .tracking(2.4)
                     .foregroundStyle(Color.black.opacity(0.78))
                     .padding(.bottom, 8)
 
                 Text(step == .email ? "Sign in with email" : "Enter your code")
                     .font(.system(size: 15, weight: .light))
                     .foregroundStyle(Color.black.opacity(0.45))
-                    .padding(.bottom, 28)
+                    .padding(.bottom, focusedField == nil ? 28 : 16)
 
                 Group {
                     switch step {
@@ -53,7 +55,16 @@ struct AuthGateView: View {
                 }
                 .padding(.horizontal, 24)
 
+                Spacer(minLength: 12)
+            }
+            .animation(.easeOut(duration: 0.28), value: focusedField)
+        }
+        .smoothKeyboardLift(extraBottom: 16)
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
+                Button("Done") { focusedField = nil }
+                    .fontWeight(.semibold)
             }
         }
         .accessibilityIdentifier("auth.gate")
@@ -69,13 +80,21 @@ struct AuthGateView: View {
             TextField("your@email.com", text: $email)
                 .textInputAutocapitalization(.never)
                 .keyboardType(.emailAddress)
+                .textContentType(.emailAddress)
                 .autocorrectionDisabled()
+                .focused($focusedField, equals: .email)
+                .submitLabel(.continue)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
                 .background(Color.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.black.opacity(0.08), lineWidth: 1)
+                        .stroke(
+                            focusedField == .email
+                                ? Color(hex: 0x2D2D44).opacity(0.28)
+                                : Color.black.opacity(0.08),
+                            lineWidth: 1
+                        )
                 )
                 .accessibilityIdentifier("auth.email")
 
@@ -120,12 +139,18 @@ struct AuthGateView: View {
             if showPasswordDev {
                 SecureField("Password (min 6)", text: $password)
                     .textContentType(.password)
+                    .focused($focusedField, equals: .password)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 14)
                     .background(Color.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .stroke(Color.black.opacity(0.08), lineWidth: 1)
+                            .stroke(
+                                focusedField == .password
+                                    ? Color(hex: 0x2D2D44).opacity(0.28)
+                                    : Color.black.opacity(0.08),
+                                lineWidth: 1
+                            )
                     )
                     .accessibilityIdentifier("auth.password")
 
@@ -152,7 +177,9 @@ struct AuthGateView: View {
             #endif
         }
         .padding(20)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .background {
+            authCardBackground
+        }
     }
 
     private var otpCard: some View {
@@ -171,13 +198,20 @@ struct AuthGateView: View {
             TextField("6-digit code", text: $otp)
                 .keyboardType(.numberPad)
                 .textInputAutocapitalization(.never)
+                .textContentType(.oneTimeCode)
                 .autocorrectionDisabled()
+                .focused($focusedField, equals: .otp)
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
                 .background(Color.white.opacity(0.9), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.black.opacity(0.08), lineWidth: 1)
+                        .stroke(
+                            focusedField == .otp
+                                ? Color(hex: 0x2D2D44).opacity(0.28)
+                                : Color.black.opacity(0.08),
+                            lineWidth: 1
+                        )
                 )
                 .onChange(of: otp) { _, newValue in
                     otp = String(newValue.filter(\.isNumber).prefix(6))
@@ -217,6 +251,7 @@ struct AuthGateView: View {
                 step = .email
                 otp = ""
                 errorMessage = nil
+                focusedField = .email
             }
             .font(.system(size: 13, weight: .light))
             .foregroundStyle(Color.black.opacity(0.45))
@@ -224,7 +259,29 @@ struct AuthGateView: View {
             .padding(.top, 2)
         }
         .padding(20)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .background {
+            authCardBackground
+        }
+    }
+
+    private var authCardBackground: some View {
+        RoundedRectangle(cornerRadius: 24, style: .continuous)
+            .fill(.ultraThinMaterial)
+            .overlay {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.88), Color.white.opacity(0.68)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 24, style: .continuous)
+                    .stroke(Color.white.opacity(0.6), lineWidth: 1)
+            }
+            .shadow(color: Color.black.opacity(0.1), radius: 24, y: 10)
     }
 
     private func sendOTP() {
@@ -235,6 +292,7 @@ struct AuthGateView: View {
             do {
                 try await session.requestOTP(email: email)
                 step = .otp
+                focusedField = .otp
             } catch {
                 errorMessage = error.localizedDescription
             }

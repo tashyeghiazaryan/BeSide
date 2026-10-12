@@ -123,12 +123,54 @@ final class SupabaseCoupleService: CoupleService, @unchecked Sendable {
         }
     }
 
+    func updateDisplayName(_ displayName: String) async throws {
+        let trimmed = displayName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            throw CoupleServiceError.underlying("Name can’t be empty.")
+        }
+        do {
+            try await client
+                .rpc("ensure_profile", params: ["p_display_name": trimmed])
+                .execute()
+        } catch {
+            throw CoupleServiceError.underlying(error.localizedDescription)
+        }
+    }
+
+    func leaveCouple() async throws {
+        do {
+            try await client.rpc("leave_couple").execute()
+        } catch {
+            throw CoupleServiceError.underlying(error.localizedDescription)
+        }
+    }
+
+    func setRelationshipStart(_ date: Date) async throws {
+        let day = Self.dayString(date)
+        do {
+            try await client
+                .rpc("set_relationship_start", params: ["p_date": day])
+                .execute()
+        } catch {
+            throw CoupleServiceError.underlying(error.localizedDescription)
+        }
+    }
+
     private func requireUserId() async throws -> UUID {
         do {
             return try await client.auth.session.user.id
         } catch {
             throw CoupleServiceError.underlying("Not signed in.")
         }
+    }
+
+    private static func dayString(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.timeZone = TimeZone(secondsFromGMT: 0)
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: date)
     }
 }
 

@@ -18,19 +18,19 @@ The app SHALL open directly into a tab shell with exactly five tabs, in this ord
 - **THEN** the shell is shown without asking the user to sign in, pair, or complete onboarding
 
 ### Requirement: Each tab shows only its placeholder
-Selecting More SHALL show that tab's placeholder and hide the other tabs' content. The More placeholder MUST identify itself as More and MUST NOT offer mood sharing, partner reactions, couple content, connection activities, profile editing, settings, or any other feature action. Selecting Me SHALL show the Me screen content defined by the `me-screen` capability. Selecting Partner SHALL show the Partner screen content defined by the `partner-screen` capability. Selecting Us SHALL show the Us screen content defined by the `us-screen` capability. Selecting Connection SHALL show the Connection screen content defined by the `connection-screen` capability instead of a named-only placeholder.
+Selecting More SHALL show the More screen content defined by the `more-screen` capability and hide the other tabs' content. Selecting Me SHALL show the Me screen content defined by the `me-screen` capability. Selecting Partner SHALL show the Partner screen content defined by the `partner-screen` capability. Selecting Us SHALL show the Us screen content defined by the `us-screen` capability. Selecting Connection SHALL show the Connection screen content defined by the `connection-screen` capability. The shell MUST NOT show a named-only More placeholder that only displays the word More without profile/settings content.
 
 #### Scenario: Switch to Connection
 - **WHEN** the user selects the Connection tab
 - **THEN** the visible screen shows Connection screen content and does not show Me, Partner, Us, or More content
 
-#### Scenario: Switch through remaining placeholders and real tabs
+#### Scenario: Switch through real tabs including More
 - **WHEN** the user selects More, then Us, then Partner, then Me, then Connection
-- **THEN** More shows only the placeholder named for that tab, Us shows Us screen content, Partner shows Partner screen content, Me shows Me screen content, and Connection shows Connection screen content
+- **THEN** More shows More screen content, Us shows Us screen content, Partner shows Partner screen content, Me shows Me screen content, and Connection shows Connection screen content
 
-#### Scenario: More placeholder has no feature actions
-- **WHEN** the user is on More
-- **THEN** the screen has no control that shares a mood, sends a reaction, edits a profile, or starts an activity
+#### Scenario: More is not a blank placeholder
+- **WHEN** the user selects the More tab
+- **THEN** the More screen content is shown rather than a screen that only displays the word More
 
 #### Scenario: Connection is not a blank placeholder
 - **WHEN** the user selects the Connection tab

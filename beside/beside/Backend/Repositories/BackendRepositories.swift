@@ -4,11 +4,13 @@ import Foundation
 
 protocol AuthService: AnyObject, Sendable {
     func currentSessionUserId() async -> UUID?
+    func currentSessionEmail() async -> String?
     func signInWithOTP(email: String) async throws
     func verifyOTP(email: String, token: String) async throws
     /// Dev fallback when email OTP is rate-limited (no email sent).
     func signUpWithPassword(email: String, password: String) async throws
     func signInWithPassword(email: String, password: String) async throws
+    func updateEmail(_ email: String) async throws
     func signOut() async throws
 }
 
@@ -16,6 +18,9 @@ protocol CoupleService: AnyObject, Sendable {
     func fetchContext() async throws -> CoupleContext
     func createCouple(displayName: String) async throws -> (CoupleContext, inviteCode: String)
     func joinCouple(code: String) async throws -> CoupleContext
+    func updateDisplayName(_ displayName: String) async throws
+    func leaveCouple() async throws
+    func setRelationshipStart(_ date: Date) async throws
 }
 
 extension CoupleService {

@@ -61,6 +61,10 @@ final class MeSessionStore {
 
     var displayName = "Anna"
     var partnerDisplayName = "Alex"
+    /// Your avatar JPEG (More picker + disk; live Storage when paired).
+    var meAvatarJPEG: Data?
+    /// Partner avatar JPEG when loaded from live profiles / Storage.
+    var partnerAvatarJPEG: Data?
 
     /// Partner's latest mood (Partner tab). Separate from your Me history.
     var partnerCurrentMood: SharedMood
@@ -279,8 +283,60 @@ final class MeSessionStore {
         self.loveNotes = LoveNote.demoSeed()
         self.sharedMemories = UsSharedMemories.demoSeed()
         self.notifications = UsNotifications.demoSeed(partnerName: "Alex")
+        self.meAvatarJPEG = AvatarDiskCache.load()
         // Fill any live-derived events not already covered by the static demo seed.
         refreshNotificationSources()
+    }
+
+    /// Saves avatar locally and uploads to Supabase when live backend is attached.
+    func setMeAvatarJPEG(_ data: Data?) {
+        meAvatarJPEG = data
+        AvatarDiskCache.save(data)
+        guard let data, let gateway = liveGateway else { return }
+        Task {
+            do {
+                try await gateway.uploadMyAvatar(jpeg: data)
+                syncError = nil
+            } catch {
+                syncError = error.localizedDescription
+            }
+        }
+    }
+
+    func setDisplayName(_ name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        displayName = trimmed
+        guard let gateway = liveGateway else { return }
+        Task {
+            do {
+                try await gateway.updateMyDisplayName(trimmed)
+                syncError = nil
+            } catch {
+                syncError = error.localizedDescription
+            }
+        }
+    }
+
+    func setRelationshipStartDate(_ date: Date) {
+        relationshipStartDate = Calendar.current.startOfDay(for: date)
+        guard let gateway = liveGateway else { return }
+        Task {
+            do {
+                try await gateway.setRelationshipStartDate(relationshipStartDate)
+                syncError = nil
+            } catch {
+                syncError = error.localizedDescription
+            }
+        }
+    }
+
+    /// Local unpaired reset after Disconnect (live leave is done by session/gateway first).
+    func disconnectPartner() {
+        isPaired = false
+        partnerAvatarJPEG = nil
+        partnerDisplayName = "Partner"
+        inviteCode = "BESIDE-4K2M"
     }
 
     var unreadNotificationsCount: Int {
@@ -742,10 +798,15 @@ final class MeSessionStore {
         displayName = context.displayName
         if let partner = context.partnerDisplayName, !partner.isEmpty {
             partnerDisplayName = partner
+        } else if !context.isPaired {
+            partnerDisplayName = "Partner"
         }
         isPaired = context.isPaired
         if let code = context.inviteCode, !code.isEmpty {
             inviteCode = code
+        }
+        if !context.isPaired {
+            partnerAvatarJPEG = nil
         }
     }
 

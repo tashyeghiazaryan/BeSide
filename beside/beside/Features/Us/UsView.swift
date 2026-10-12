@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// Us home shell — Figma Make `UsScreen` first viewport (feature flows stubbed).
 struct UsView: View {
@@ -470,8 +471,8 @@ struct UsView: View {
                     .accessibilityIdentifier("us.time.together")
 
                 HStack(spacing: -22) {
-                    avatarBubble(name: store.displayName)
-                    avatarBubble(name: store.partnerDisplayName)
+                    avatarBubble(name: store.displayName, jpeg: store.meAvatarJPEG)
+                    avatarBubble(name: store.partnerDisplayName, jpeg: store.partnerAvatarJPEG)
                 }
                 .padding(.bottom, 16)
                 .accessibilityIdentifier("us.avatars")
@@ -492,39 +493,49 @@ struct UsView: View {
         .accessibilityIdentifier("us.hero")
     }
 
-    private func avatarBubble(name: String) -> some View {
+    private func avatarBubble(name: String, jpeg: Data?) -> some View {
         let initial = String(name.prefix(1)).uppercased()
         // Figma `US_AVATAR_*` — soft dusty rose wash, navy rim, ink initial.
         let rose = Color(hex: 0xE8BEC9)
         let roseLight = Color(hex: 0xF3D6DE)
         let roseDeep = Color(hex: 0xD9A8B6)
-        return Text(initial)
-            .font(.system(size: 26, weight: .light))
-            .foregroundStyle(ink.opacity(0.72))
-            .frame(width: 76, height: 76)
-            .background {
-                Circle()
-                    .fill(rose.opacity(0.18))
-                    .overlay {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        roseLight.opacity(0.38),
-                                        rose.opacity(0.32),
-                                        roseDeep.opacity(0.28),
-                                    ],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                    }
-                    .overlay {
-                        Circle().stroke(ink.opacity(0.12), lineWidth: 1)
-                    }
-                    .shadow(color: ink.opacity(0.1), radius: 7, y: 4)
+        let photo = jpeg.flatMap { UIImage(data: $0) }
+        return Group {
+            if let photo {
+                Image(uiImage: photo)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Text(initial)
+                    .font(.system(size: 26, weight: .light))
+                    .foregroundStyle(ink.opacity(0.72))
             }
-            .accessibilityLabel(name)
+        }
+        .frame(width: 76, height: 76)
+        .background {
+            Circle()
+                .fill(rose.opacity(0.18))
+                .overlay {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    roseLight.opacity(0.38),
+                                    rose.opacity(0.32),
+                                    roseDeep.opacity(0.28),
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                }
+        }
+        .clipShape(Circle())
+        .overlay {
+            Circle().stroke(ink.opacity(0.12), lineWidth: 1)
+        }
+        .shadow(color: ink.opacity(0.1), radius: 7, y: 4)
+        .accessibilityLabel(name)
     }
 
     private var dailyProgress: some View {
