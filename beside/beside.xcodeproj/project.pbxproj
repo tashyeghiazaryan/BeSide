@@ -409,6 +409,8 @@
 				DEVELOPMENT_TEAM = RCM82X5MZ7;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "BeSide uses the camera so you can share a moment for your home-screen widget.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "BeSide needs photo access so you can choose a Shared Moment for your widget.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -437,6 +439,8 @@
 				DEVELOPMENT_TEAM = RCM82X5MZ7;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_NSCameraUsageDescription = "BeSide uses the camera so you can share a moment for your home-screen widget.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "BeSide needs photo access so you can choose a Shared Moment for your widget.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

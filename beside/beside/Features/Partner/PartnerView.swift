@@ -37,49 +37,8 @@ struct PartnerView: View {
 
     var body: some View {
         NavigationStack {
-            ZStack {
+            PairingRequiredGate(store: store, session: session) {
                 pairedContent
-                    .blur(radius: store.isPaired ? 0 : 5)
-                    .opacity(store.isPaired ? 1 : 0.72)
-                    .scaleEffect(store.isPaired ? 1 : 1.02, anchor: .top)
-                    .allowsHitTesting(store.isPaired)
-
-                if !store.isPaired {
-                    PartnerPairingModal(
-                        inviteCode: store.inviteCode,
-                        usesLiveBackend: session?.phase == .authenticated,
-                        onCreateInvite: session.map { session in
-                            {
-                                let code = try await session.createCouple(displayName: store.displayName)
-                                if let context = session.coupleContext {
-                                    store.applyCoupleContext(context)
-                                } else {
-                                    store.inviteCode = code
-                                }
-                                return code
-                            }
-                        },
-                        onJoin: session.map { session in
-                            { code in
-                                try await session.joinCouple(code: code)
-                                if let context = session.coupleContext {
-                                    store.applyCoupleContext(context)
-                                }
-                            }
-                        },
-                        onRefresh: session.map { session in
-                            {
-                                await session.refreshCoupleContext()
-                                if let context = session.coupleContext {
-                                    store.applyCoupleContext(context)
-                                }
-                            }
-                        },
-                        onPaired: {
-                            store.completePairing()
-                        }
-                    )
-                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .ignoresSafeArea(.keyboard)

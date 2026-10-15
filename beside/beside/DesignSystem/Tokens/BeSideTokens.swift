@@ -36,6 +36,8 @@ enum BeSideColor {
 
     /// Unread badge / raspberry accent (малиновый).
     static let raspberry = Color(hex: 0xD61F69)
+    /// Important Dates — soft violet for near events (in ≤3 days / tomorrow).
+    static let dateNear = Color(hex: 0x8250C8)
 
     /// Love Notes tile — soft pastel pink (Figma `#F8BBD0`).
     static let loveNotePink = Color(hex: 0xF8BBD0)
@@ -61,6 +63,70 @@ enum BeSideBackground {
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
+    }
+
+    /// Us / home widgets wallpaper — warm soft neutral, slightly brighter.
+    static var widgetCanvas: LinearGradient {
+        LinearGradient(
+            colors: [
+                Color(hex: 0xFAF8F7),
+                Color.white,
+                Color(hex: 0xF5F3F2),
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    /// Soft pink/lilac wash for the widget wallpaper (very light, top-left bias).
+    static func widgetAmbientBlobs() -> some View {
+        ZStack {
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color(hex: 0xFCE7F3).opacity(0.62),
+                            Color(hex: 0xFCE7F3).opacity(0.0),
+                        ],
+                        center: .center,
+                        startRadius: 20,
+                        endRadius: 220
+                    )
+                )
+                .frame(width: 420, height: 420)
+                .offset(x: -90, y: -160)
+
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color(hex: 0xE0E7FF).opacity(0.38),
+                            Color(hex: 0xE0E7FF).opacity(0.0),
+                        ],
+                        center: .center,
+                        startRadius: 10,
+                        endRadius: 200
+                    )
+                )
+                .frame(width: 360, height: 360)
+                .offset(x: 130, y: 280)
+
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            Color(hex: 0xDDD6FE).opacity(0.26),
+                            Color.clear,
+                        ],
+                        center: .center,
+                        startRadius: 8,
+                        endRadius: 160
+                    )
+                )
+                .frame(width: 280, height: 280)
+                .offset(x: 40, y: 40)
+        }
+        .allowsHitTesting(false)
     }
 
     /// Auth / More shell — `from-gray-50 via-white to-gray-100` (Figma AuthScreen).

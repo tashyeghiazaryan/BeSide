@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Shows the Us tab home: the couple hero, daily progress, long-term connection progress, Important Dates, Love Notes, and Shared Memories entry flows — matching the Figma Make Us home layout.
+Shows the Us tab home: the couple hero, daily progress chips, then stacked sections for Important Dates and Love Notes (header + two preview cards each), and a full-width Shared Moments row (opens the Screen photo page with archive / widget). Shared Memories is not a separate home section — past shared photos live in Shared Moments → Archive.
 
 ## Requirements
 
@@ -21,7 +21,7 @@ The Us home SHALL show both partners’ display names (e.g. “Anna & Alex”), 
 - **THEN** the hero shows “Anna & Alex” and a together-for duration string
 
 ### Requirement: Daily progress chips
-Below the avatars, the Us home SHALL show three daily progress chips labeled mood, partner, and prompt (short labels as in the reference). A chip is marked done only when **both** partners have completed that task for the day (seeded flags). Tapping a chip SHALL toggle a compact tip popover with the task’s full label and explanation; tapping again or elsewhere SHALL dismiss it without moving the long-term progress bar or the rest of the page layout. Chips MUST NOT navigate to Me, Partner, or Connection in this slice.
+Below the avatars, the Us home SHALL show three daily progress chips labeled mood, partner, and prompt (short labels as in the reference). A chip is marked done only when **both** partners have completed that task for the day (seeded flags). Tapping a chip SHALL toggle a compact tip popover with the task’s full label and explanation; tapping again or elsewhere SHALL dismiss it without moving the rest of the page layout. Chips MUST NOT navigate to Me, Partner, or Connection in this slice. The Us hero MUST NOT show a long-term level name, streak label, XP progress bar, or point totals.
 
 #### Scenario: Tip on chip tap
 - **WHEN** the user taps the mood chip
@@ -33,33 +33,37 @@ Below the avatars, the Us home SHALL show three daily progress chips labeled moo
 
 #### Scenario: Dismiss tip
 - **WHEN** a tip is open and the user taps the same chip again or taps elsewhere on the Us screen
-- **THEN** the tip closes and the progress bar position is unchanged
+- **THEN** the tip closes and the page layout below the chips is unchanged
 
-### Requirement: Long-term level and streak
-Below daily progress, the Us home SHALL show the current long-term level name, a streak label (days), a progress bar for points toward the next level, and current/goal point numbers — using seeded demo values when no live progression exists.
+#### Scenario: No level or streak chrome
+- **WHEN** the user opens Us
+- **THEN** the hero shows daily progress chips and MUST NOT show a level/milestone name or streak label
 
-#### Scenario: Level bar visible
-- **WHEN** the user opens Us with seeded level 7, points 420, streak 3
-- **THEN** the level name, “Streak · 3 days”, and a progress bar reflecting points vs goal are visible
+### Requirement: Shared Moments card
+Below Important Dates / Love Notes, the Us home SHALL show a compact rectangular card labeled “Shared Moments” for sharing a photo that can appear on the home-screen widget. The tile subtitle SHALL read “Send each other photos — keep one on a home-screen widget”. Tapping the card SHALL open the Screen photo detail page (back returns to Us home). The Us home MUST NOT show a separate Shared Memories section.
 
-### Requirement: Entry tiles are visual stubs
-The Us home SHALL show Important Dates and Love Notes tiles in a two-column grid and a Shared Memories section below, matching the reference layout. The Important Dates tile SHALL open the Important Dates flows. The Love Notes tile SHALL open the Love Notes page; the pencil button SHALL open the Compose modal. The Shared Memories section SHALL open the Shared Memories flows (gallery from the header, Add from `+`, detail from carousel cards). The Wishlist affordance on the Important Dates tile remains as previously implemented (or a stub if not yet shipped): this change MUST NOT remove Wishlist behavior.
+#### Scenario: Card opens Screen page
+- **WHEN** the user taps the Shared Moments card
+- **THEN** the Screen photo page opens with a back control to return home
 
-#### Scenario: Love Notes tile opens page
-- **WHEN** the user taps the Love Notes tile body
+#### Scenario: Archive from Screen page
+- **WHEN** the user taps Archive on the Screen photo page
+- **THEN** an archive page opens for past screen photos (empty when none)
+
+#### Scenario: No Shared Memories on home
+- **WHEN** the user opens Us
+- **THEN** the home scroll does not show a Shared Memories entry section
+
+### Requirement: Entry cards (Important Dates / Love Notes)
+The Us home SHALL show Important Dates and Love Notes as sections: an uppercase section title with chevron above the cards (title is not inside each card), then a row of two content cards, then Shared Moments. Dates and Shared Moments use Connection-style white cards (`white@0.82` + soft shadow). Love Notes use navy fill (`BeSideColor.navyFill`) with light copy and pink heart accents — same navy as Connection Play. Wishlist / Add sit on the Dates header; pencil sits on the Love Notes header.
+
+#### Scenario: Love Notes header opens page
+- **WHEN** the user taps the Love Notes section title
 - **THEN** the Love Notes page opens
 
 #### Scenario: Pencil opens Compose
-- **WHEN** the user taps the pencil button on the Love Notes tile
+- **WHEN** the user taps the pencil control on the Love Notes header
 - **THEN** the Compose modal opens without navigating to the page first
-
-#### Scenario: Shared Memories opens gallery
-- **WHEN** the user taps the Shared Memories header
-- **THEN** the Shared Memories gallery page opens
-
-#### Scenario: Shared Memories plus opens Add
-- **WHEN** the user taps `+` on the Shared Memories section
-- **THEN** the Add memory modal opens
 
 ### Requirement: Important Dates list modal
 When the Important Dates list is open, the Us tab SHALL show a centered frosted-glass modal over a dimmed/blurred scrim titled “Important dates” with subtitle “All your moments together”. The modal SHALL list all session important dates sorted by soonest upcoming occurrence, each row showing title, short date, and a countdown-style badge. An empty list MUST show guidance to add a date via +. The user SHALL dismiss the modal by tapping Close or the scrim.

@@ -3,7 +3,8 @@ import SwiftUI
 /// Add Important Date calendar — Figma Make UsScreen add modal.
 struct ImportantDatesAddModal: View {
     let onClose: () -> Void
-    let onAdd: (String, Date, UsDateIconPreset) -> Bool
+    /// title, note (always nil from this modal), date, icon
+    let onAdd: (String, String?, Date, UsDateIconPreset) -> Bool
     /// Called after a successful save (after the brief success flash).
     var onAdded: (() -> Void)? = nil
 
@@ -93,7 +94,7 @@ struct ImportantDatesAddModal: View {
                             .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(ink.opacity(0.45))
 
-                        TextField("e.g. Trip to the coast", text: $titleText)
+                        TextField("e.g. Dinner in restaurant", text: $titleText)
                             .font(.system(size: 14, weight: .light))
                             .foregroundStyle(ink.opacity(0.85))
                             .focused($titleFocused)
@@ -364,7 +365,7 @@ struct ImportantDatesAddModal: View {
             titleFocused = true
             return
         }
-        guard onAdd(clean, selectedDay, selectedIcon) else { return }
+        guard onAdd(clean, nil, selectedDay, selectedIcon) else { return }
         titleFocused = false
         titleText = ""
         self.selectedDay = nil

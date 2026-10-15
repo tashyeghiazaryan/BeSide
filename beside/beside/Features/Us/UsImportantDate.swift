@@ -14,6 +14,8 @@ struct UsImportantDate: Identifiable, Hashable, Sendable {
 
     let id: String
     var title: String
+    /// Optional short description shown under the title on Us cards.
+    var note: String?
     var date: Date
     var kind: Kind
     /// Accent for list icon sphere (hex without alpha).
@@ -37,10 +39,12 @@ struct UsImportantDate: Identifiable, Hashable, Sendable {
         kind: Kind,
         accentHex: UInt32,
         systemImage: String,
-        iconPresetRaw: String? = nil
+        iconPresetRaw: String? = nil,
+        note: String? = nil
     ) {
         self.id = id
         self.title = title
+        self.note = note
         self.date = date
         self.kind = kind
         self.accentHex = accentHex
@@ -53,10 +57,12 @@ struct UsImportantDate: Identifiable, Hashable, Sendable {
         title: String,
         date: Date,
         kind: Kind,
-        preset: UsDateIconPreset
+        preset: UsDateIconPreset,
+        note: String? = nil
     ) {
         self.id = id
         self.title = title
+        self.note = note
         self.date = date
         self.kind = kind
         self.accentHex = preset.accentHex
@@ -102,6 +108,30 @@ enum UsImportantDates {
         f.locale = Locale(identifier: "en_GB")
         f.dateFormat = "d MMM"
         return f.string(from: date)
+    }
+
+    /// Monday-start week containing `day` (7 start-of-day dates).
+    static func weekDays(containing day: Date, calendar: Calendar = .current) -> [Date] {
+        var cal = calendar
+        cal.firstWeekday = 2 // Monday
+        let start = cal.startOfDay(for: day)
+        let weekday = cal.component(.weekday, from: start)
+        let mondayOffset = (weekday + 5) % 7 // Mon=0 … Sun=6
+        guard let monday = cal.date(byAdding: .day, value: -mondayOffset, to: start) else {
+            return [start]
+        }
+        return (0..<7).compactMap { cal.date(byAdding: .day, value: $0, to: monday) }.map { cal.startOfDay(for: $0) }
+    }
+
+    static func dates(
+        on day: Date,
+        from dates: [UsImportantDate],
+        calendar: Calendar = .current
+    ) -> [UsImportantDate] {
+        let target = calendar.startOfDay(for: day)
+        return dates
+            .filter { calendar.isDate($0.date, inSameDayAs: target) }
+            .sorted { daysUntil($0.date, now: target, calendar: calendar) < daysUntil($1.date, now: target, calendar: calendar) }
     }
 
     static func monthYearLabel(_ date: Date) -> String {
@@ -162,24 +192,27 @@ enum UsImportantDates {
         return [
             UsImportantDate(
                 id: "next-soon",
-                title: "Next date together",
+                title: "Dinner in restaurant",
                 date: nextTogether,
                 kind: .nextDate,
-                preset: .sparklesCoral
+                preset: .sparklesCoral,
+                note: "Get ready at 7!"
             ),
             UsImportantDate(
                 id: "anniversary",
                 title: "Our Anniversary",
                 date: nextAnnualOccurrence(of: relationshipStart, now: now, calendar: calendar),
                 kind: .anniversary,
-                preset: .heartRose
+                preset: .heartRose,
+                note: "Celebrate together"
             ),
             UsImportantDate(
                 id: "birthday",
                 title: "\(partnerName)'s Birthday",
                 date: nextAnnualOccurrence(of: birthday, now: now, calendar: calendar),
                 kind: .birthday,
-                preset: .giftLavender
+                preset: .giftLavender,
+                note: "Don't forget the cake"
             ),
             UsImportantDate(
                 id: "special-day",

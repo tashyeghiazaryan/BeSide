@@ -4,13 +4,28 @@ struct RootTabView: View {
     @Bindable var meStore: MeSessionStore
     var session: AppSessionStore?
 
-    @State private var selection: AppTab = .me
+    @State private var selection: AppTab = RootTabView.initialTab()
     @State private var isKeyboardVisible = false
     @State private var hideFloatingTabBar = false
     @State private var darkFloatingTabBar = false
 
     private var showFloatingTabBar: Bool {
         !isKeyboardVisible && !hideFloatingTabBar
+    }
+
+    /// `-startTab us` (etc.) for screenshots / UI harness.
+    private static func initialTab() -> AppTab {
+        let args = ProcessInfo.processInfo.arguments
+        guard let idx = args.firstIndex(of: "-startTab"), args.indices.contains(idx + 1) else {
+            return .me
+        }
+        switch args[idx + 1].lowercased() {
+        case "partner": return .partner
+        case "us": return .us
+        case "connection": return .connection
+        case "more": return .more
+        default: return .me
+        }
     }
 
     var body: some View {
@@ -46,9 +61,9 @@ struct RootTabView: View {
         case .partner:
             PartnerView(store: meStore, session: session)
         case .us:
-            UsView(store: meStore, onSelectTab: { selection = $0 })
+            UsView(store: meStore, session: session, onSelectTab: { selection = $0 })
         case .connection:
-            ConnectionView(store: meStore)
+            ConnectionView(store: meStore, session: session)
         case .more:
             MoreView(store: meStore, session: session)
         }

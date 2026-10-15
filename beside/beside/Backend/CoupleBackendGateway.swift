@@ -396,7 +396,15 @@ final class CoupleBackendGateway {
 
     // MARK: - Important dates
 
-    func addImportantDate(title: String, date: Date, kind: String, accentHex: String?, systemImage: String?, iconPreset: String?) async throws -> UsImportantDate {
+    func addImportantDate(
+        title: String,
+        date: Date,
+        kind: String,
+        accentHex: String?,
+        systemImage: String?,
+        iconPreset: String?,
+        note: String? = nil
+    ) async throws -> UsImportantDate {
         struct Insert: Encodable {
             let couple_id: UUID
             let title: String
@@ -405,9 +413,11 @@ final class CoupleBackendGateway {
             let accent_hex: String?
             let system_image: String?
             let icon_preset: String?
+            let note: String?
             let created_by: UUID
         }
         let cid = try coupleId
+        let cleanNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
         let row: ImportantDateRow = try await client
             .from("important_dates")
             .insert(
@@ -419,6 +429,7 @@ final class CoupleBackendGateway {
                     accent_hex: accentHex,
                     system_image: systemImage,
                     icon_preset: iconPreset,
+                    note: (cleanNote?.isEmpty == false) ? cleanNote : nil,
                     created_by: context.userId
                 )
             )
@@ -820,11 +831,13 @@ private struct ImportantDateRow: Decodable {
     let accent_hex: String?
     let system_image: String?
     let icon_preset: String?
+    let note: String?
 
     var asModel: UsImportantDate {
         let date = CoupleBackendGateway.parseDay(occurs_on) ?? Date()
         let kind = UsImportantDate.Kind(rawValue: kind) ?? .custom
         let hex = UInt32(accent_hex?.replacingOccurrences(of: "#", with: "") ?? "C9A7B8", radix: 16) ?? 0xC9A7B8
+        let cleanNote = note?.trimmingCharacters(in: .whitespacesAndNewlines)
         return UsImportantDate(
             id: id.uuidString,
             title: title,
@@ -832,7 +845,8 @@ private struct ImportantDateRow: Decodable {
             kind: kind,
             accentHex: hex,
             systemImage: system_image ?? "heart.fill",
-            iconPresetRaw: icon_preset
+            iconPresetRaw: icon_preset,
+            note: (cleanNote?.isEmpty == false) ? cleanNote : nil
         )
     }
 }

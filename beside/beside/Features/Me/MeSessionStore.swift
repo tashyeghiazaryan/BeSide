@@ -119,7 +119,7 @@ final class MeSessionStore {
     var partnerQuizPhase: PartnerQuizPhase
     /// Today's assigned role for this session round.
     var partnerQuizRole: PartnerQuizRole
-    /// Whether Claim & Reconnect already applied this round's points to Us.
+    /// Whether Continue already applied this round’s quiet progress toward the Us milestone.
     var partnerQuizRewardClaimed: Bool
     /// Demo Premium flag (no real billing).
     var isPremium: Bool
@@ -127,6 +127,8 @@ final class MeSessionStore {
     var customPartnerQuizQuestion: PartnerQuizQuestion?
     /// Important dates for Us (seeded + user-added this session).
     var importantDates: [UsImportantDate]
+    /// Little Things for the Us Dates detail / tile (session seed; not synced yet).
+    var partnerAsks: [UsPartnerAsk]
     /// My wishlist items (session-only).
     var myWishlist: [UsWishlistItem]
     /// Partner wishlist (seeded demo).
@@ -137,6 +139,8 @@ final class MeSessionStore {
     var loveNotes: [LoveNote]
     /// Shared memories (session-only, seeded demos).
     var sharedMemories: [UsSharedMemory]
+    /// Current Shared Moments photo for the home-screen widget (session-only JPEG).
+    var sharedMomentPhotoJPEG: Data?
     /// In-app notifications (session-only, seeded demos).
     var notifications: [UsNotification]
 
@@ -277,11 +281,13 @@ final class MeSessionStore {
             relationshipStart: relationshipStart,
             partnerName: "Alex"
         )
+        self.partnerAsks = UsPartnerAsk.demoSeed()
         self.myWishlist = []
         self.partnerWishlist = UsWishlist.partnerSeed()
         self.wishlistHistory = []
         self.loveNotes = LoveNote.demoSeed()
         self.sharedMemories = UsSharedMemories.demoSeed()
+        self.sharedMomentPhotoJPEG = nil
         self.notifications = UsNotifications.demoSeed(partnerName: "Alex")
         self.meAvatarJPEG = AvatarDiskCache.load()
         // Fill any live-derived events not already covered by the static demo seed.
@@ -438,11 +444,60 @@ final class MeSessionStore {
         )
     }
 
+    /// Set or clear the Shared Moments photo shown on the tile / widget preview (session-only).
+    func setSharedMomentPhotoJPEG(_ data: Data?) {
+        sharedMomentPhotoJPEG = data
+    }
+
+    /// Add a Little Thing you ask of your partner (session-only for now).
+    /// At most ``UsPartnerAsk.maxFromMePerDay`` asks from you per day (done still counts).
+    @discardableResult
+    func addPartnerAsk(body: String, day: Date = Date()) -> Bool {
+        let clean = body.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !clean.isEmpty else { return false }
+        let dayStart = Calendar.current.startOfDay(for: day)
+        guard UsPartnerAsk.canAddFromMe(on: dayStart, from: partnerAsks) else { return false }
+        let entry = UsPartnerAsk(
+            id: "ask-\(UUID().uuidString)",
+            body: String(clean.prefix(80)),
+            author: .me,
+            day: dayStart,
+            createdAt: Date(),
+            completedAt: nil
+        )
+        partnerAsks.insert(entry, at: 0)
+        return true
+    }
+
+    func canAddPartnerAsk(on day: Date = Date()) -> Bool {
+        UsPartnerAsk.canAddFromMe(on: day, from: partnerAsks)
+    }
+
+    /// Mark a Little Thing done / open again (assignee action; session-only).
+    func setPartnerAskDone(id: String, done: Bool) {
+        guard let index = partnerAsks.firstIndex(where: { $0.id == id }) else { return }
+        partnerAsks[index].completedAt = done ? Date() : nil
+    }
+
+    func togglePartnerAskDone(id: String) {
+        guard let ask = partnerAsks.first(where: { $0.id == id }) else { return }
+        setPartnerAskDone(id: id, done: !ask.isDone)
+    }
+
     /// Add a custom important date for this session. Returns false if title empty.
     @discardableResult
-    func addImportantDate(title: String, date: Date, icon: UsDateIconPreset = .defaultCustom) -> Bool {
+    func addImportantDate(
+        title: String,
+        date: Date,
+        icon: UsDateIconPreset = .defaultCustom,
+        note: String? = nil
+    ) -> Bool {
         let clean = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !clean.isEmpty else { return false }
+        let noteValue: String? = {
+            guard let raw = note?.trimmingCharacters(in: .whitespacesAndNewlines), !raw.isEmpty else { return nil }
+            return String(raw.prefix(80))
+        }()
         let calendar = Calendar.current
         let day = calendar.startOfDay(for: date)
         let entry = UsImportantDate(
@@ -450,7 +505,8 @@ final class MeSessionStore {
             title: clean,
             date: day,
             kind: .custom,
-            preset: icon
+            preset: icon,
+            note: noteValue
         )
         importantDates.append(entry)
         refreshDateReminders()
@@ -464,7 +520,8 @@ final class MeSessionStore {
                         kind: UsImportantDate.Kind.custom.rawValue,
                         accentHex: accent,
                         systemImage: entry.systemImage,
-                        iconPreset: icon.rawValue
+                        iconPreset: icon.rawValue,
+                        note: noteValue
                     )
                     if let idx = importantDates.firstIndex(where: { $0.id == entry.id }) {
                         importantDates[idx] = saved
@@ -938,7 +995,7 @@ final class MeSessionStore {
         )
     }
 
-    /// Apply this round's points to the Us long-term progress bar (once per round).
+    /// Apply this round's progress toward the Us together milestone (once per round).
     @discardableResult
     func claimPartnerQuizReward() -> Int {
         guard partnerQuizPhase == .results, !partnerQuizRewardClaimed else { return 0 }

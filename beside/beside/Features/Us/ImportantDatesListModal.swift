@@ -228,6 +228,12 @@ struct ImportantDatesListModal: View {
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(inkRGB)
                         .lineLimit(1)
+                    if let note = item.note, !note.isEmpty {
+                        Text(note)
+                            .font(.system(size: 11, weight: .light))
+                            .foregroundStyle(inkRGB.opacity(0.48))
+                            .lineLimit(1)
+                    }
                     Text(UsImportantDates.shortDate(item.date))
                         .font(.system(size: 11, weight: .light))
                         .foregroundStyle(inkRGB.opacity(0.42))

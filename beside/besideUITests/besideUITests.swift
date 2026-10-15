@@ -112,9 +112,18 @@ final class besideUITests: XCTestCase {
         XCTAssertTrue(screen(app, "screen.us").waitForExistence(timeout: 5))
         XCTAssertTrue(screen(app, "us.hero").waitForExistence(timeout: 3))
         XCTAssertTrue(screen(app, "us.daily.progress").exists)
-        XCTAssertTrue(screen(app, "us.level").exists)
+        XCTAssertFalse(screen(app, "us.level").exists)
         XCTAssertTrue(screen(app, "us.entry.tiles").exists)
-        XCTAssertTrue(screen(app, "us.memories").exists)
+        XCTAssertTrue(screen(app, "us.screen.card").exists)
+        XCTAssertFalse(screen(app, "us.memories").exists)
+        screen(app, "us.screen.card").tap()
+        XCTAssertTrue(screen(app, "us.screen.page").waitForExistence(timeout: 3))
+        XCTAssertTrue(screen(app, "us.screen.archive").exists)
+        screen(app, "us.screen.archive").tap()
+        XCTAssertTrue(screen(app, "us.screen.archive.page").waitForExistence(timeout: 3))
+        screen(app, "us.screen.archive.back").tap()
+        screen(app, "us.screen.back").tap()
+        XCTAssertTrue(screen(app, "us.entry.tiles").waitForExistence(timeout: 3))
         XCTAssertTrue(
             app.staticTexts["Anna & Alex"].waitForExistence(timeout: 2)
                 || screen(app, "us.couple.names").exists
@@ -132,16 +141,16 @@ final class besideUITests: XCTestCase {
 
         screen(app, "tab.us").tap()
         XCTAssertTrue(screen(app, "us.tile.dates").waitForExistence(timeout: 5))
-        screen(app, "us.tile.dates").tap()
-        XCTAssertTrue(screen(app, "us.dates.list.modal").waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["Important dates"].exists)
-        XCTAssertTrue(app.staticTexts["Add a date"].exists)
-        screen(app, "us.dates.list.close").tap()
-        XCTAssertFalse(screen(app, "us.dates.list.modal").waitForExistence(timeout: 1))
+        XCTAssertTrue(screen(app, "us.tile.asks").waitForExistence(timeout: 2))
+        XCTAssertTrue(screen(app, "us.tile.lovenotes").waitForExistence(timeout: 2))
+        XCTAssertTrue(screen(app, "us.screen.card").waitForExistence(timeout: 2))
 
-        screen(app, "us.tile.dates.add").tap()
-        XCTAssertTrue(screen(app, "us.dates.add.modal").waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["Add a date"].exists)
+        screen(app, "us.tile.dates").tap()
+        XCTAssertTrue(screen(app, "us.dates.list.page").waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["Important dates"].exists)
+
+        screen(app, "us.dates.list.add").tap()
+        XCTAssertTrue(screen(app, "us.dates.add.page").waitForExistence(timeout: 3))
 
         let day = screen(app, "us.dates.add.day.1")
         XCTAssertTrue(day.waitForExistence(timeout: 2))
@@ -153,8 +162,17 @@ final class besideUITests: XCTestCase {
         title.typeText("Coast trip")
 
         screen(app, "us.dates.add.commit").tap()
-        XCTAssertTrue(screen(app, "us.dates.list.modal").waitForExistence(timeout: 4))
-        XCTAssertTrue(app.staticTexts["Coast trip"].waitForExistence(timeout: 2))
+        XCTAssertTrue(screen(app, "us.dates.list.page").waitForExistence(timeout: 4))
+        screen(app, "us.dates.list.back").tap()
+        XCTAssertFalse(screen(app, "us.dates.list.page").waitForExistence(timeout: 1))
+
+        screen(app, "us.tile.asks").tap()
+        XCTAssertTrue(screen(app, "us.dates.detail.page").waitForExistence(timeout: 3))
+        XCTAssertTrue(screen(app, "us.dates.detail.week").exists)
+        XCTAssertTrue(screen(app, "us.dates.detail.hero").exists)
+        XCTAssertTrue(screen(app, "us.dates.detail.asks").exists)
+        screen(app, "us.dates.detail.back").tap()
+        XCTAssertFalse(screen(app, "us.dates.detail.page").waitForExistence(timeout: 1))
     }
 
     @MainActor
@@ -177,13 +195,12 @@ final class besideUITests: XCTestCase {
         let app = XCUIApplication()
         app.launch()
 
+        // Wishlist ideas entry remains on the Us gift control (list modal is no longer the primary Dates path).
         screen(app, "tab.us").tap()
-        XCTAssertTrue(screen(app, "us.tile.dates").waitForExistence(timeout: 5))
-        screen(app, "us.tile.dates").tap()
-        XCTAssertTrue(screen(app, "us.dates.list.wishlist").waitForExistence(timeout: 3))
-        screen(app, "us.dates.list.wishlist").tap()
+        XCTAssertTrue(screen(app, "us.tile.wishlist").waitForExistence(timeout: 5))
+        screen(app, "us.tile.wishlist").tap()
         XCTAssertTrue(screen(app, "us.wishlist.page").waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["Alex"].exists)
+        XCTAssertTrue(app.staticTexts["Wishlist"].exists || app.staticTexts["Alex"].exists)
     }
 
     @MainActor
@@ -232,50 +249,19 @@ final class besideUITests: XCTestCase {
     }
 
     @MainActor
-    func testSharedMemoriesGalleryOpensFromHeader() throws {
+    func testScreenPhotoArchiveOpensFromTheirScreen() throws {
         let app = XCUIApplication()
         app.launch()
 
         screen(app, "tab.us").tap()
-        XCTAssertTrue(screen(app, "us.memories").waitForExistence(timeout: 5))
-        screen(app, "us.memories").tap()
-        XCTAssertTrue(screen(app, "us.memories.page").waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["All your moments"].exists)
-        screen(app, "us.memories.back").tap()
-        XCTAssertFalse(screen(app, "us.memories.page").waitForExistence(timeout: 1))
-    }
-
-    @MainActor
-    func testSharedMemoryAddFromPlus() throws {
-        let app = XCUIApplication()
-        app.launch()
-
-        screen(app, "tab.us").tap()
-        XCTAssertTrue(screen(app, "us.memories.add").waitForExistence(timeout: 5))
-        screen(app, "us.memories.add").tap()
-        XCTAssertTrue(screen(app, "us.memories.add.modal").waitForExistence(timeout: 3))
-
-        let title = screen(app, "us.memories.add.title")
-        XCTAssertTrue(title.waitForExistence(timeout: 2))
-        title.tap()
-        title.typeText("Sunset picnic")
-        screen(app, "us.memories.add.commit").tap()
-        XCTAssertTrue(screen(app, "us.memories.page").waitForExistence(timeout: 4))
-        XCTAssertTrue(app.staticTexts["Sunset picnic"].waitForExistence(timeout: 2))
-    }
-
-    @MainActor
-    func testSharedMemoryDetailOpensFromCarousel() throws {
-        let app = XCUIApplication()
-        app.launch()
-
-        screen(app, "tab.us").tap()
-        XCTAssertTrue(screen(app, "us.memories.carousel").waitForExistence(timeout: 5))
-        let card = screen(app, "us.memories.card.memory-1")
-        XCTAssertTrue(card.waitForExistence(timeout: 3))
-        card.tap()
-        XCTAssertTrue(screen(app, "us.memories.detail").waitForExistence(timeout: 3))
-        XCTAssertTrue(app.staticTexts["Evening on the rooftop"].exists)
+        XCTAssertTrue(screen(app, "us.screen.card").waitForExistence(timeout: 5))
+        screen(app, "us.screen.card").tap()
+        XCTAssertTrue(screen(app, "us.screen.page").waitForExistence(timeout: 3))
+        screen(app, "us.screen.archive").tap()
+        XCTAssertTrue(screen(app, "us.screen.archive.page").waitForExistence(timeout: 3))
+        XCTAssertTrue(app.staticTexts["No archived photos yet"].exists)
+        screen(app, "us.screen.archive.back").tap()
+        XCTAssertTrue(screen(app, "us.screen.page").waitForExistence(timeout: 2))
     }
 
     @MainActor
@@ -379,7 +365,7 @@ final class besideUITests: XCTestCase {
 
         XCTAssertTrue(screen(app, "connection.quiz.question").waitForExistence(timeout: 3))
 
-        // Seeded truths: coffee b, weekend b, love c, stress b → 3/4 = +30 pts.
+        // Seeded truths: coffee b, weekend b, love c, stress b → 3/4 correct.
         let picks = ["b", "b", "c", "b"]
         for optionID in picks {
             let option = screen(app, "connection.quiz.option.\(optionID)")
@@ -390,19 +376,20 @@ final class besideUITests: XCTestCase {
 
         XCTAssertTrue(screen(app, "connection.quiz.results").waitForExistence(timeout: 3))
         XCTAssertTrue(screen(app, "connection.quiz.score").exists)
-        XCTAssertTrue(screen(app, "connection.quiz.points").exists)
+        XCTAssertFalse(
+            screen(app, "connection.quiz.points").exists,
+            "Quiz results should not show a points earn chip"
+        )
         XCTAssertTrue(screen(app, "connection.quiz.result.pq-coffee").exists)
 
         screen(app, "connection.quiz.done").tap()
         XCTAssertTrue(screen(app, "connection.carousel").waitForExistence(timeout: 3))
 
         screen(app, "tab.us").tap()
-        let level = screen(app, "us.level")
-        XCTAssertTrue(level.waitForExistence(timeout: 3))
-        // Seed starts at 420; +30 from quiz → 450 toward next level.
-        XCTAssertTrue(
-            level.label.contains("450"),
-            "Claim should add quiz points to Us level bar, got: \(level.label)"
+        XCTAssertTrue(screen(app, "us.daily.progress").waitForExistence(timeout: 3))
+        XCTAssertFalse(
+            screen(app, "us.level").exists,
+            "Us hero should not show level/streak chrome"
         )
     }
 

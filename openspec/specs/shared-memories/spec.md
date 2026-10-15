@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Session-backed Shared Memories on the Us tab: home carousel, add modal, user-added gallery with date filter, detail viewer, and system share — matching Figma Make `UsScreen` behavior for this slice.
+Session-backed Shared Memories remain available for notification deep links and add/detail flows. The Us home no longer shows a Shared Memories section — past shared photos live under Shared Moments → Archive (`us-screen`). Gallery / add / detail stay for existing memory data until screen-archive replace lands.
 
 ## Requirements
 
@@ -10,31 +10,19 @@ Session-backed Shared Memories on the Us tab: home carousel, add modal, user-add
 A shared memory SHALL have an id, title, dateTime, optional description, mood emoji, optional photo reference, likes count, likedByMe flag, and addedByUser flag. The session store SHALL hold an ordered array of memories and expose demo seeds on first launch (at least one non-user seed and one or more user-added seeds).
 
 #### Scenario: Seed memories on fresh session
-- **WHEN** the user opens Us for the first time
-- **THEN** the Shared Memories carousel shows seeded memories including at least one titled moment
+- **WHEN** the user opens a fresh session
+- **THEN** the store includes seeded memories including at least one titled moment
 
 #### Scenario: User-added flag
 - **WHEN** the user successfully adds a memory via Add
 - **THEN** that memory is marked addedByUser and appears in the gallery
 
-### Requirement: Us home Shared Memories section
-The Us home SHALL show a matte frosted Shared Memories section with title “Shared Memories”, supporting subtitle, a `+` control that opens Add, and a header control that opens the gallery. When memories exist, the section SHALL show a horizontal swipeable card carousel (photo or mood placeholder, title, short date, share control on the card) and page dots when there is more than one card. When empty, the section SHALL show guidance to add the first moment. Tapping a card (without a drag) SHALL open the detail viewer for that memory.
+### Requirement: No Shared Memories block on Us home
+The Us home MUST NOT show a Shared Memories carousel, header, or `+` entry. Shared photo history SHALL use Shared Moments → Archive instead.
 
-#### Scenario: Open gallery from header
-- **WHEN** the user taps the Shared Memories header
-- **THEN** the Shared Memories gallery page opens
-
-#### Scenario: Open add from plus
-- **WHEN** the user taps `+` on the Shared Memories section
-- **THEN** the Add memory modal opens
-
-#### Scenario: Open detail from carousel card
-- **WHEN** the user taps a carousel card without having dragged
-- **THEN** the memory detail overlay opens for that memory
-
-#### Scenario: Empty carousel
-- **WHEN** no memories exist
-- **THEN** the section shows empty-state guidance instead of cards
+#### Scenario: Home has no Memories section
+- **WHEN** the user opens Us
+- **THEN** no Shared Memories section is visible on the home scroll
 
 ### Requirement: Add memory modal
 The Add memory modal SHALL be a centered frosted-glass card over a dimmed/blurred scrim titled “Share a new memory” with subtitle copy. It SHALL collect title (required, max 40), date/time (defaults to now if unset), optional description (max 120), optional photo via device picker (Wishlist-style), and a mood emoji from a fixed set. Title and description SHALL accept Latin letters, digits, common punctuation, spaces, and emoji only; disallowed characters are filtered on input. “Share a memory” SHALL create a new memory with addedByUser true, prepend it to the session list, close the modal, reset fields, and open the gallery with filter All when validation passes. Validation failures SHALL show inline alerts under the relevant field (not system alerts). Empty title, whitespace-only description, or invalid text MUST NOT create a memory. Dismiss via Close or scrim without requiring save.
@@ -56,7 +44,7 @@ The Add memory modal SHALL be a centered frosted-glass card over a dimmed/blurre
 - **THEN** the modal closes and no memory is added
 
 ### Requirement: Shared Memories gallery page
-Tapping the Shared Memories header SHALL open a full-screen gallery page (slide from right) titled Shared Memories with subtitle “Moments you added”, back control, and `+` to Add. The page SHALL list only memories with addedByUser true in a two-column grid, filterable by All or by month chips derived from those memories. Empty states SHALL distinguish “no moments yet” vs “nothing in this month”. Tapping a grid cell SHALL open the detail viewer.
+When Shared Memories is opened (e.g. from a notification deep link), the app SHALL show a full-screen gallery page (slide from right) titled Shared Memories with subtitle “Moments you added”, back control, and `+` to Add. The page SHALL list only memories with addedByUser true in a two-column grid, filterable by All or by month chips derived from those memories. Empty states SHALL distinguish “no moments yet” vs “nothing in this month”. Tapping a grid cell SHALL open the detail viewer.
 
 #### Scenario: Gallery shows only user-added
 - **WHEN** both seeded non-user and user-added memories exist

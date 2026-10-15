@@ -1,28 +1,39 @@
+import PhotosUI
 import SwiftUI
 import UIKit
 
 /// Us home shell — Figma Make `UsScreen` first viewport (feature flows stubbed).
 struct UsView: View {
     @Bindable var store: MeSessionStore
+    var session: AppSessionStore? = nil
     /// Switch root tabs (e.g. mood-reaction notification → Me).
     var onSelectTab: ((AppTab) -> Void)? = nil
     @State private var dailyTipID: DailyTaskID?
-    @State private var showLevelTip = false
     @State private var showImportantDatesList = false
+    @State private var showDatesDetail = false
+    @State private var showLittleThingsAdd = false
+    @State private var littleThingsAddDay = Calendar.current.startOfDay(for: Date())
     @State private var showImportantDatesAdd = false
     @State private var showWishlist = false
     @State private var wishlistInitialTab: WishlistPage.Tab = .mine
+    /// Cycles same-day Important Dates on the Us tile.
     @State private var datesTileIndex = 0
+    /// After a manual swipe, pause auto-advance briefly.
+    @State private var datesTilePauseUntil = Date.distantPast
     @State private var showLoveNotesPage = false
+    @State private var showScreenPhotoPage = false
     @State private var showLoveNoteCompose = false
     @State private var loveNoteReading: LoveNote?
     @State private var showSharedMemoriesPage = false
     @State private var showSharedMemoryAdd = false
     @State private var editingMemory: UsSharedMemory?
     @State private var viewingMemoryID: String?
-    @State private var memoryCarouselIndex = 0
-    @State private var memoryCarouselDragged = false
     @State private var showNotifications = false
+    @State private var showSharedMomentSourceSheet = false
+    @State private var showSharedMomentCamera = false
+    @State private var showSharedMomentLibrary = false
+    @State private var sharedMomentPickerItem: PhotosPickerItem?
+    @State private var cameraCaptureJPEG: Data?
 
     private enum DailyTaskID: String, CaseIterable, Identifiable {
         case mood
@@ -61,13 +72,12 @@ struct UsView: View {
 
     private var ink: Color { Color(hex: 0x26282B) }
 
-    private var anyTipOpen: Bool { dailyTipID != nil || showLevelTip }
+    private var anyTipOpen: Bool { dailyTipID != nil }
 
     private func dismissTips() {
         guard anyTipOpen else { return }
         withAnimation(.easeOut(duration: 0.18)) {
             dailyTipID = nil
-            showLevelTip = false
         }
     }
 
@@ -79,11 +89,11 @@ struct UsView: View {
 
     var body: some View {
         ZStack(alignment: .topLeading) {
-            BeSideBackground.softCanvas
+            BeSideBackground.widgetCanvas
                 .ignoresSafeArea()
                 .onTapGesture(perform: dismissTips)
 
-            usAmbient
+            BeSideBackground.widgetAmbientBlobs()
                 .ignoresSafeArea()
                 .allowsHitTesting(false)
 
@@ -95,12 +105,8 @@ struct UsView: View {
                         .padding(.bottom, 16)
                         .zIndex(anyTipOpen ? 50 : 0)
 
-                    entryTiles
-                        .padding(.bottom, 24)
-                        .zIndex(0)
-                        .overlay { if anyTipOpen { tipDismissOverlay } }
-
-                    sharedMemoriesSection
+                    homeEntrySections
+                        .padding(.horizontal, -10)
                         .padding(.bottom, 28)
                         .zIndex(0)
                         .overlay { if anyTipOpen { tipDismissOverlay } }
@@ -112,7 +118,8 @@ struct UsView: View {
             }
             .scrollClipDisabled()
 
-            if !showNotifications {
+            if !showNotifications && !showScreenPhotoPage && !showDatesDetail
+                && !showImportantDatesList && !showImportantDatesAdd {
                 notificationsBell
                     .padding(.leading, 14)
                     .padding(.top, 4)
@@ -133,39 +140,89 @@ struct UsView: View {
                 .zIndex(100)
             }
 
+            if showDatesDetail {
+                DatesDetailPage(
+                    store: store,
+                    onClose: {
+                        withAnimation(.easeOut(duration: 0.22)) {
+                            showDatesDetail = false
+                        }
+                    },
+                    onAddLittleThing: { day in
+                        openLittleThingsAdd(day: day)
+                    }
+                )
+                .transition(.asymmetric(
+                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                    removal: .move(edge: .trailing).combined(with: .opacity)
+                ))
+                .zIndex(88)
+            }
+
+            if showLittleThingsAdd {
+                LittleThingsAddModal(
+                    day: littleThingsAddDay,
+                    onClose: { showLittleThingsAdd = false },
+                    onAdd: { body, day in
+                        store.addPartnerAsk(body: body, day: day)
+                    },
+                    fromMeCount: { day in
+                        UsPartnerAsk.countFromMe(on: day, from: store.partnerAsks)
+                    }
+                )
+                .transition(.opacity)
+                .zIndex(94)
+            }
+
             if showImportantDatesList {
-                ImportantDatesListModal(
+                ImportantDatesListPage(
                     dates: store.importantDatesSorted,
-                    onClose: { showImportantDatesList = false },
-                    onWishlistIdeas: {
-                        showImportantDatesList = false
-                        openWishlist(tab: .partner)
+                    onClose: {
+                        withAnimation(.easeOut(duration: 0.22)) {
+                            showImportantDatesList = false
+                        }
                     },
                     onAddDate: {
-                        showImportantDatesList = false
-                        showImportantDatesAdd = true
+                        openDatesAdd()
+                    },
+                    onWishlistIdeas: {
+                        withAnimation(.easeOut(duration: 0.22)) {
+                            showImportantDatesList = false
+                        }
+                        openWishlist(tab: .partner)
                     },
                     onDeleteDate: { date in
                         store.deleteImportantDate(id: date.id)
                     }
                 )
-                .transition(.opacity)
-                .zIndex(80)
+                .transition(.asymmetric(
+                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                    removal: .move(edge: .trailing).combined(with: .opacity)
+                ))
+                .zIndex(88)
             }
 
             if showImportantDatesAdd {
-                ImportantDatesAddModal(
-                    onClose: { showImportantDatesAdd = false },
-                    onAdd: { title, date, icon in
-                        store.addImportantDate(title: title, date: date, icon: icon)
+                ImportantDatesAddPage(
+                    onClose: {
+                        withAnimation(.easeOut(duration: 0.22)) {
+                            showImportantDatesAdd = false
+                        }
+                    },
+                    onAdd: { title, note, date, icon in
+                        store.addImportantDate(title: title, date: date, icon: icon, note: note)
                     },
                     onAdded: {
-                        showImportantDatesAdd = false
-                        showImportantDatesList = true
+                        withAnimation(.easeOut(duration: 0.22)) {
+                            showImportantDatesAdd = false
+                        }
                     }
                 )
-                .transition(.opacity)
-                .zIndex(81)
+                .transition(.asymmetric(
+                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                    removal: .move(edge: .trailing).combined(with: .opacity)
+                ))
+                .zIndex(92)
             }
 
             if showWishlist {
@@ -179,6 +236,15 @@ struct UsView: View {
                         removal: .move(edge: .trailing).combined(with: .opacity)
                     ))
                     .zIndex(90)
+            }
+
+            if showScreenPhotoPage {
+                ScreenPhotoPage(
+                    store: store,
+                    onClose: { showScreenPhotoPage = false },
+                    onPickPhoto: { showSharedMomentSourceSheet = true }
+                )
+                .zIndex(93)
             }
 
             if showLoveNotesPage {
@@ -283,7 +349,6 @@ struct UsView: View {
                             photoData: photoData
                         )
                         if ok {
-                            memoryCarouselIndex = 0
                             showSharedMemoriesPage = true
                         }
                         return ok
@@ -324,26 +389,70 @@ struct UsView: View {
                 .zIndex(98)
             }
         }
-        .animation(.easeOut(duration: 0.2), value: showImportantDatesList)
-        .animation(.easeOut(duration: 0.2), value: showImportantDatesAdd)
+        .animation(.spring(response: 0.38, dampingFraction: 0.86), value: showImportantDatesList)
+        .animation(.spring(response: 0.38, dampingFraction: 0.86), value: showImportantDatesAdd)
+        .animation(.spring(response: 0.38, dampingFraction: 0.86), value: showDatesDetail)
+        .animation(.easeOut(duration: 0.2), value: showLittleThingsAdd)
         .animation(.spring(response: 0.38, dampingFraction: 0.86), value: showWishlist)
         .animation(.spring(response: 0.38, dampingFraction: 0.86), value: showLoveNotesPage)
+        .animation(.spring(response: 0.38, dampingFraction: 0.86), value: showScreenPhotoPage)
         .animation(.spring(response: 0.38, dampingFraction: 0.86), value: showSharedMemoriesPage)
         .animation(.spring(response: 0.38, dampingFraction: 0.86), value: showNotifications)
         .animation(.easeOut(duration: 0.2), value: loveNoteReading != nil)
         .animation(.easeOut(duration: 0.2), value: viewingMemoryID != nil)
         .animation(.easeOut(duration: 0.2), value: showSharedMemoryAdd)
-        .onChange(of: store.sharedMemories.count) { _, newCount in
-            if memoryCarouselIndex >= newCount {
-                memoryCarouselIndex = max(0, newCount - 1)
-            }
-        }
         .onAppear {
             store.refreshNotificationSources()
         }
         .ignoresSafeArea(.keyboard)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(AppTab.us.screenIdentifier)
+        .pairingRequiredGate(store: store, session: session)
+        .confirmationDialog(
+            "Add a Shared Moment",
+            isPresented: $showSharedMomentSourceSheet,
+            titleVisibility: .visible
+        ) {
+            if CameraImagePicker.isCameraAvailable {
+                Button("Take Photo") {
+                    cameraCaptureJPEG = nil
+                    showSharedMomentCamera = true
+                }
+            }
+            Button("Choose from Library") {
+                showSharedMomentLibrary = true
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .photosPicker(
+            isPresented: $showSharedMomentLibrary,
+            selection: $sharedMomentPickerItem,
+            matching: .images,
+            photoLibrary: .shared()
+        )
+        .onChange(of: sharedMomentPickerItem) { _, item in
+            guard let item else { return }
+            Task {
+                if let photo = try? await item.loadTransferable(type: SharedMemoryPickedPhoto.self) {
+                    store.setSharedMomentPhotoJPEG(photo.data)
+                } else if let data = try? await item.loadTransferable(type: Data.self),
+                          let image = UIImage(data: data),
+                          let jpeg = image.jpegData(compressionQuality: 0.82) {
+                    store.setSharedMomentPhotoJPEG(jpeg)
+                }
+                sharedMomentPickerItem = nil
+            }
+        }
+        .fullScreenCover(isPresented: $showSharedMomentCamera) {
+            CameraImagePicker(imageData: $cameraCaptureJPEG)
+                .ignoresSafeArea()
+        }
+        .onChange(of: cameraCaptureJPEG) { _, data in
+            guard let data else { return }
+            store.setSharedMomentPhotoJPEG(data)
+            cameraCaptureJPEG = nil
+            showSharedMomentCamera = false
+        }
     }
 
     private func openNotification(_ notification: UsNotification) {
@@ -363,7 +472,7 @@ struct UsView: View {
             }
         case .importantDate:
             store.refreshDateReminders()
-            showImportantDatesList = true
+            openDatesDetail()
         case .sharedMemory:
             if let id = notification.relatedID {
                 openMemoryFeed(startingAt: id)
@@ -378,35 +487,41 @@ struct UsView: View {
         wishlistInitialTab = tab
         showImportantDatesAdd = false
         showImportantDatesList = false
+        showDatesDetail = false
         showWishlist = true
     }
 
-    private var usAmbient: some View {
-        ZStack {
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [Color(hex: 0xFBCFE8).opacity(0.55), Color(hex: 0xC4B5FD).opacity(0.4)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: 360, height: 360)
-                .blur(radius: 90)
-                .offset(x: -120, y: -160)
-            Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [Color(hex: 0xA7F3D0).opacity(0.35), Color(hex: 0x93C5FD).opacity(0.45)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .frame(width: 300, height: 300)
-                .blur(radius: 80)
-                .offset(x: 130, y: 320)
+    private func openDatesDetail() {
+        dismissTips()
+        showImportantDatesAdd = false
+        showImportantDatesList = false
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+            showDatesDetail = true
         }
-        .allowsHitTesting(false)
+    }
+
+    private func openDatesList() {
+        dismissTips()
+        showImportantDatesAdd = false
+        showDatesDetail = false
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+            showImportantDatesList = true
+        }
+    }
+
+    private func openDatesAdd() {
+        dismissTips()
+        withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
+            showImportantDatesAdd = true
+        }
+    }
+
+    private func openLittleThingsAdd(day: Date = Date()) {
+        dismissTips()
+        littleThingsAddDay = Calendar.current.startOfDay(for: day)
+        withAnimation(.easeOut(duration: 0.2)) {
+            showLittleThingsAdd = true
+        }
     }
 
     private var notificationsBell: some View {
@@ -470,7 +585,7 @@ struct UsView: View {
                     .padding(.bottom, 18)
                     .accessibilityIdentifier("us.time.together")
 
-                HStack(spacing: -22) {
+                HStack(spacing: -28) {
                     avatarBubble(name: store.displayName, jpeg: store.meAvatarJPEG)
                     avatarBubble(name: store.partnerDisplayName, jpeg: store.partnerAvatarJPEG)
                 }
@@ -484,9 +599,6 @@ struct UsView: View {
             dailyProgress
                 .padding(.bottom, 14)
                 .zIndex(dailyTipID == nil ? 0 : 40)
-
-            longTermBar
-                .zIndex(showLevelTip ? 40 : 0)
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 0)
@@ -507,11 +619,11 @@ struct UsView: View {
                     .scaledToFill()
             } else {
                 Text(initial)
-                    .font(.system(size: 26, weight: .light))
+                    .font(.system(size: 34, weight: .light))
                     .foregroundStyle(ink.opacity(0.72))
             }
         }
-        .frame(width: 76, height: 76)
+        .frame(width: 100, height: 100)
         .background {
             Circle()
                 .fill(rose.opacity(0.18))
@@ -534,7 +646,7 @@ struct UsView: View {
         .overlay {
             Circle().stroke(ink.opacity(0.12), lineWidth: 1)
         }
-        .shadow(color: ink.opacity(0.1), radius: 7, y: 4)
+        .shadow(color: ink.opacity(0.1), radius: 10, y: 5)
         .accessibilityLabel(name)
     }
 
@@ -558,7 +670,6 @@ struct UsView: View {
                 }
                 Button {
                     withAnimation(.easeOut(duration: 0.2)) {
-                        showLevelTip = false
                         dailyTipID = dailyTipID == id ? nil : id
                     }
                 } label: {
@@ -648,97 +759,137 @@ struct UsView: View {
         }
     }
 
-    private var longTermBar: some View {
-        let streak = store.usStreakDays
-        let goal = store.usPointsToNext
-        let frac = store.usLevelProgressFraction
-        let points = store.usLongTermPoints
-        let goalText = goal > 0 ? "\(goal)" : "max"
-
-        return Button {
-            withAnimation(.easeOut(duration: 0.2)) {
-                dailyTipID = nil
-                showLevelTip.toggle()
-            }
+    private var screenPhotoCard: some View {
+        Button {
+            dismissTips()
+            showScreenPhotoPage = true
         } label: {
-            VStack(spacing: 8) {
-                HStack(alignment: .firstTextBaseline) {
-                    Text(store.usLevelName)
-                        .font(.system(size: 16, weight: .medium))
-                        .tracking(0.2)
-                        .foregroundStyle(ink.opacity(0.68))
-                        .lineLimit(1)
-                    Spacer(minLength: 8)
-                    Text("Streak · \(streak) \(streak == 1 ? "day" : "days")")
-                        .font(.system(size: 13, weight: .semibold))
-                        .tracking(0.2)
-                        .foregroundStyle(BeSideColor.navyStart.opacity(0.85))
-                }
+            HStack(alignment: .center, spacing: 12) {
+                HStack(alignment: .center, spacing: 10) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(Color(hex: 0xE8BEC9).opacity(0.32))
+                        Image(systemName: "photo.on.rectangle.angled")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(BeSideColor.navyStart.opacity(0.72))
+                    }
+                    .frame(width: 36, height: 36)
 
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(ink.opacity(0.06))
-                            .overlay {
-                                Capsule().stroke(Color(hex: 0x1A1A2E).opacity(0.12), lineWidth: 1)
-                            }
-                        Capsule()
-                            .fill(
-                                LinearGradient(
-                                    colors: [
-                                        BeSideColor.navyStart,
-                                        BeSideColor.navyEnd,
-                                        Color(hex: 0x3D3D58),
-                                        BeSideColor.navyEnd,
-                                        BeSideColor.navyStart,
-                                    ],
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .frame(width: max(8, geo.size.width * frac))
-                            .shadow(color: BeSideColor.navyStart.opacity(0.28), radius: 6, y: 0)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("Shared Moments")
+                            .font(.system(size: 10, weight: .light))
+                            .tracking(1.2)
+                            .textCase(.uppercase)
+                            .foregroundStyle(ink.opacity(0.42))
+
+                        HStack(spacing: 3) {
+                            Text("Send each other photos — keep one on a home-screen widget")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(ink.opacity(0.82))
+                                .lineLimit(2)
+                                .multilineTextAlignment(.leading)
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(ink.opacity(0.28))
+                        }
                     }
                 }
-                .frame(height: 9)
 
-                HStack {
-                    Text("\(points)")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(ink.opacity(0.52))
-                        .monospacedDigit()
-                    Spacer()
-                    Text(goal > 0 ? "\(goal)" : "—")
-                        .font(.system(size: 14, weight: .light))
-                        .foregroundStyle(ink.opacity(0.38))
-                        .monospacedDigit()
-                }
+                Spacer(minLength: 6)
+
+                screenPhotoPreviewThumb
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
+        .background { usGlassChrome(.screen) }
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .accessibilityLabel(
-            "Level progress \(points) of \(goalText) points. Show level explanation."
+            "Shared Moments. Send each other photos — keep one on a home-screen widget. Empty."
         )
-        .accessibilityIdentifier("us.level")
-        .accessibilityAddTraits(.isButton)
-        .overlay(alignment: .top) {
-            if showLevelTip {
-                tipCard(
-                    title: "\(store.usLevelEmoji)  \(store.usLevelName)",
-                    body: "This bar tracks your long-term connection. Sharing moods, reacting to each other, and completing prompts together adds points toward the next level — a quiet map of how your bond grows over time."
-                )
-                .padding(.top, 52)
-                .transition(
-                    .asymmetric(
-                        insertion: .opacity.combined(with: .scale(scale: 0.96, anchor: .top)),
-                        removal: .opacity.combined(with: .scale(scale: 0.97, anchor: .top))
-                    )
-                )
-                .accessibilityIdentifier("us.level.tip")
+        .accessibilityIdentifier("us.screen.card")
+    }
+
+    /// Mini home-screen widget + two shared photo cards (shows real JPEG when set).
+    private var screenPhotoPreviewThumb: some View {
+        let rose = Color(hex: 0xE8BEC9)
+        let mist = Color(hex: 0xC7D2FE)
+        let photoWash = LinearGradient(
+            colors: [
+                Color(hex: 0xFCE7F3),
+                rose.opacity(0.9),
+                mist.opacity(0.75),
+            ],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        let captured = store.sharedMomentPhotoJPEG.flatMap { UIImage(data: $0) }
+
+        return ZStack(alignment: .bottomLeading) {
+            // Back shared photo — slightly tilted
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(photoWash.opacity(0.85))
+                .frame(width: 46, height: 54)
+                .overlay {
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .stroke(Color.white.opacity(0.7), lineWidth: 1)
+                }
+                .rotationEffect(.degrees(-8))
+                .offset(x: 2, y: -6)
+                .shadow(color: BeSideColor.navyStart.opacity(0.08), radius: 3, y: 1)
+
+            // Front: home-screen widget frame with photo
+            VStack(spacing: 0) {
+                HStack(spacing: 3) {
+                    Capsule()
+                        .fill(Color.white.opacity(0.55))
+                        .frame(width: 10, height: 2.5)
+                    Spacer(minLength: 0)
+                    Circle()
+                        .fill(Color.white.opacity(0.5))
+                        .frame(width: 4, height: 4)
+                }
+                .padding(.horizontal, 7)
+                .padding(.top, 6)
+
+                Group {
+                    if let captured {
+                        Image(uiImage: captured)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .fill(photoWash)
+                            .overlay {
+                                Image(systemName: "heart.fill")
+                                    .font(.system(size: 12, weight: .semibold))
+                                    .foregroundStyle(Color.white.opacity(0.85))
+                            }
+                    }
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                .padding(.horizontal, 6)
+                .padding(.top, 5)
+                .padding(.bottom, 7)
             }
+            .frame(width: 58, height: 68)
+            .background {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.white.opacity(0.72))
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(Color.white.opacity(0.85), lineWidth: 1)
+                    }
+                    .shadow(color: BeSideColor.navyStart.opacity(0.12), radius: 6, y: 3)
+            }
+            .offset(x: 14, y: 0)
         }
-        .accessibilityElement(children: showLevelTip ? .contain : .combine)
+        .frame(width: 72, height: 74, alignment: .bottomLeading)
+        .accessibilityHidden(true)
     }
 
     private func tipCard(eyebrow: String? = nil, title: String, body: String) -> some View {
@@ -776,311 +927,689 @@ struct UsView: View {
         }
     }
 
-    private var entryTiles: some View {
-        HStack(alignment: .top, spacing: 10) {
-            importantDatesTile
-            loveNotesTile
+    /// 2×2 square tiles: Dates | Little Things / Love Notes | Screen.
+    private var homeEntrySections: some View {
+        let columns = [
+            GridItem(.flexible(), spacing: 12),
+            GridItem(.flexible(), spacing: 12),
+        ]
+
+        return LazyVGrid(columns: columns, spacing: 12) {
+            usDatesTile
+            usAsksTile
+            usLoveNotesTile
+            usScreenTile
         }
-        // Figma: grid items-stretch; Love Notes drives the row
-        .frame(height: 210)
         .accessibilityIdentifier("us.entry.tiles")
+        .onAppear {
+            if store.partnerAsks.isEmpty {
+                store.partnerAsks = UsPartnerAsk.demoSeed()
+            }
+        }
     }
 
-    private var importantDatesTile: some View {
-        let datesInk = Color(hex: 0x26282B)
-        let butter = Color(hex: 0xFFEDA8)
-        let previews = store.usTileRotatingDates
-        let preview: UsImportantDate? = {
-            guard !previews.isEmpty else { return nil }
-            return previews[datesTileIndex % previews.count]
-        }()
-        let extraCount = store.usTileExtraCount
-        let shouldRotate = previews.count > 1
+    private var usDatesTile: some View {
+        let rotating = store.usTileRotatingDates
+        let safeIndex = rotating.isEmpty ? 0 : datesTileIndex % rotating.count
+        let featured: UsImportantDate? = rotating.isEmpty ? nil : rotating[safeIndex]
+        let days = featured.map { UsImportantDates.daysUntil($0.date) }
+        let urgency = days.map { dateUrgency(days: $0) }
+        let canCarousel = rotating.count > 1
 
-        return ZStack(alignment: .topTrailing) {
-            Button {
-                dismissTips()
-                showImportantDatesAdd = false
-                showImportantDatesList = true
-            } label: {
-                VStack(alignment: .leading, spacing: 0) {
-                    // Header + countdown share one row so the badge never covers “Important Dates”
-                    // on narrow tiles (iPhone 16 / SE / Plus).
-                    HStack(alignment: .top, spacing: 6) {
-                        Text("Important\nDates")
-                            .font(.system(size: 11, weight: .light))
-                            .tracking(1.4)
-                            .textCase(.uppercase)
-                            .foregroundStyle(datesInk.opacity(0.38))
-                            .multilineTextAlignment(.leading)
-                            .lineSpacing(1)
-                            .fixedSize(horizontal: true, vertical: true)
-                            .layoutPriority(1)
-
-                        if let preview {
-                            Spacer(minLength: 4)
-
-                            Text(UsImportantDates.countdownLabel(UsImportantDates.daysUntil(preview.date)))
-                                .font(.system(size: 9, weight: .semibold))
-                                .tracking(0.2)
-                                .foregroundStyle(datesInk.opacity(0.46))
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.7)
-                                .padding(.horizontal, 6)
-                                .padding(.vertical, 3)
-                                .background {
-                                    Capsule()
-                                        .fill(
-                                            LinearGradient(
-                                                colors: [
-                                                    butter.opacity(0.16),
-                                                    Color.white.opacity(0.42),
-                                                ],
-                                                startPoint: .top,
-                                                endPoint: .bottom
-                                            )
-                                        )
-                                        .overlay {
-                                            Capsule().stroke(butter.opacity(0.22), lineWidth: 1)
-                                        }
-                                        .shadow(color: datesInk.opacity(0.04), radius: 2, y: 1)
-                                }
-                                .fixedSize()
-                                .layoutPriority(0)
-                                .id("dates-tile-badge-\(preview.id)")
-                                .transition(.opacity)
-                        }
-                    }
-
-                    if let preview {
-                        Text(preview.title)
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(datesInk)
-                            .lineLimit(2)
-                            .multilineTextAlignment(.leading)
-                            .padding(.top, 8)
-                            .id("dates-tile-title-\(preview.id)")
-                            .transition(.opacity)
-
-                        Text(UsImportantDates.shortDate(preview.date))
-                            .font(.system(size: 14, weight: .light))
-                            .foregroundStyle(datesInk.opacity(0.55))
-                            .padding(.top, 4)
-                            .id("dates-tile-date-\(preview.id)")
-                            .transition(.opacity)
-
-                        if extraCount > 0 {
-                            Text("+\(extraCount) more")
-                                .font(.system(size: 13, weight: .light))
-                                .foregroundStyle(datesInk.opacity(0.42))
-                                .padding(.top, 2)
-                                .accessibilityIdentifier("us.tile.dates.more")
-                        }
-                    } else {
-                        Text("Tap to see all important dates")
-                            .font(.system(size: 14, weight: .light))
-                            .foregroundStyle(datesInk.opacity(0.55))
-                            .padding(.top, 12)
-                    }
-
-                    Spacer(minLength: 0)
+        return Button {
+            openDatesList()
+        } label: {
+            ZStack {
+                if let urgency {
+                    dateUrgencyWash(urgency)
                 }
-                .padding(.top, 12)
-                .padding(.horizontal, 12)
-                .padding(.bottom, 44)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                .contentShape(Rectangle())
-                .animation(.easeInOut(duration: 0.35), value: preview?.id)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(
-                preview.map { item in
-                    extraCount > 0
-                        ? "Open important dates list, \(item.title), +\(extraCount) more"
-                        : "Open important dates list, \(item.title)"
-                } ?? "Open important dates list"
-            )
-            .accessibilityIdentifier("us.tile.dates")
 
-            HStack(spacing: 6) {
+                if let featured, let urgency {
+                    datesTileEventContent(date: featured, urgency: urgency)
+                        .contentTransition(.opacity)
+                        .id("us.dates.tile.featured.\(featured.id)")
+                } else {
+                    datesTileEmptyContent
+                }
+
+                if canCarousel {
+                    VStack {
+                        Spacer(minLength: 0)
+                        HStack(spacing: 5) {
+                            ForEach(0..<rotating.count, id: \.self) { index in
+                                Circle()
+                                    .fill(
+                                        BeSideColor.navyStart.opacity(
+                                            index == safeIndex ? 0.55 : 0.18
+                                        )
+                                    )
+                                    .frame(width: 5, height: 5)
+                            }
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.leading, 12)
+                        .padding(.bottom, 12)
+                    }
+                    .accessibilityHidden(true)
+                }
+
+                VStack {
+                    Spacer(minLength: 0)
+                    HStack(spacing: 8) {
+                        Spacer(minLength: 0)
+                        // Layout spacers for gift / + overlays.
+                        Color.clear.frame(width: 34, height: 34)
+                        Color.clear.frame(width: 34, height: 34)
+                    }
+                }
+                .padding(10)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .simultaneousGesture(
+            DragGesture(minimumDistance: 20)
+                .onEnded { value in
+                    guard canCarousel else { return }
+                    let dx = value.translation.width
+                    datesTilePauseUntil = Date().addingTimeInterval(5)
+                    withAnimation(.easeInOut(duration: 0.28)) {
+                        if dx < -24 {
+                            datesTileIndex = (safeIndex + 1) % rotating.count
+                        } else if dx > 24 {
+                            datesTileIndex = (safeIndex - 1 + rotating.count) % rotating.count
+                        }
+                    }
+                }
+        )
+        .overlay(alignment: .bottomTrailing) {
+            HStack(spacing: 8) {
                 Button {
                     openWishlist(tab: .mine)
                 } label: {
-                    matteIconLabel(systemName: "gift", label: "Wishlist")
+                    Image(systemName: "gift")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(BeSideColor.navyStart.opacity(0.5))
+                        .frame(width: 34, height: 34)
+                        .background {
+                            Circle().fill(Color.white.opacity(0.62))
+                        }
                 }
                 .buttonStyle(.plain)
                 .accessibilityIdentifier("us.tile.wishlist")
 
                 Button {
-                    dismissTips()
-                    showImportantDatesList = false
-                    showImportantDatesAdd = true
+                    openDatesAdd()
                 } label: {
-                    matteIconLabel(systemName: "plus", label: "Open calendar to add a date")
+                    Image(systemName: "plus")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Color.white.opacity(0.95))
+                        .frame(width: 34, height: 34)
+                        .background { Circle().fill(BeSideColor.navyFill) }
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Add a date")
                 .accessibilityIdentifier("us.tile.dates.add")
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
-            .padding(8)
+            .padding(10)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    // Figma `IMPORTANT_DATES_MODAL_GLASS.surface`
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.50),
-                                    Color(hex: 0xFFFCF2).opacity(0.44),
-                                    Color(hex: 0xFFF4DA).opacity(0.38),
-                                    Color.white.opacity(0.34),
-                                ],
-                                startPoint: UnitPoint(x: 0.15, y: 0),
-                                endPoint: UnitPoint(x: 0.85, y: 1)
-                            )
-                        )
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.white.opacity(0.52), lineWidth: 1)
-                }
-                .shadow(color: Color(hex: 0x0F172A).opacity(0.09), radius: 28, y: 10)
-                .shadow(color: butter.opacity(0.14), radius: 14, y: 5)
+        .aspectRatio(0.88, contentMode: .fit)
+        .beSideGlassChrome(cornerRadius: BeSideMetrics.glassCorner, style: .widgetFrosted)
+        .overlay(alignment: .topTrailing) {
+            if let days, let urgency {
+                dateUrgencyBadge(days: days, urgency: urgency)
+                    .padding(10)
+                    .allowsHitTesting(false)
+            }
         }
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .environment(\.colorScheme, .light)
-        .task(id: previews.map(\.id)) {
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(
+            featured.map { "\($0.title), \(UsImportantDates.shortDate($0.date))" }
+                ?? "Important dates"
+        )
+        .accessibilityHint(canCarousel ? "Swipe to see more dates on this day" : "Opens important dates list")
+        .accessibilityIdentifier("us.tile.dates")
+        .onAppear {
             datesTileIndex = 0
-            guard shouldRotate else { return }
-            while !Task.isCancelled {
-                try? await Task.sleep(for: .seconds(3.6))
-                guard !Task.isCancelled else { break }
-                if showImportantDatesList || showImportantDatesAdd || showWishlist { continue }
-                withAnimation(.easeInOut(duration: 0.35)) {
-                    datesTileIndex = (datesTileIndex + 1) % previews.count
-                }
+        }
+        .onChange(of: store.usTileRotatingDates.map(\.id)) { _, ids in
+            if ids.isEmpty {
+                datesTileIndex = 0
+            } else if datesTileIndex >= ids.count {
+                datesTileIndex = 0
+            }
+        }
+        .onReceive(Timer.publish(every: 3.5, on: .main, in: .common).autoconnect()) { _ in
+            let count = store.usTileRotatingDates.count
+            guard count > 1 else { return }
+            guard Date() >= datesTilePauseUntil else { return }
+            withAnimation(.easeInOut(duration: 0.35)) {
+                datesTileIndex = (datesTileIndex + 1) % count
             }
         }
     }
 
-    private var loveNotesTile: some View {
-        let tileKind = store.loveNotesTileKind
-        let isActive = tileKind == .incomingActive
+    private func datesTileEventContent(date: UsImportantDate, urgency: DateUrgency) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Important Dates")
+                .font(.system(size: 11, weight: .semibold))
+                .tracking(0.6)
+                .textCase(.uppercase)
+                .foregroundStyle(BeSideColor.navyStart.opacity(0.4))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .padding(.trailing, 72)
 
-        return ZStack(alignment: .bottomTrailing) {
-            Button(action: { showLoveNotesPage = true }) {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("Love Notes")
-                            .font(.system(size: 11, weight: .light))
-                            .tracking(1.6)
-                            .textCase(.uppercase)
-                            .foregroundStyle(Color.white.opacity(0.72))
-                        Spacer()
-                        if tileKind == .incomingActive {
-                            Text("\(store.incomingUnreadLoveNotes.count)")
-                                .font(.system(size: 13, weight: .semibold).monospacedDigit())
-                                .foregroundStyle(Color.white.opacity(0.9))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 2)
-                                .background(
-                                    Capsule()
-                                        .fill(Color.white.opacity(0.28))
-                                )
-                        }
-                        if tileKind == .outgoingOnly {
-                            Text("\(store.outgoingLoveNotes.count) sent")
-                                .font(.system(size: 11, weight: .semibold).monospacedDigit())
-                                .foregroundStyle(Color.white.opacity(0.85))
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(
-                                    Capsule()
-                                        .fill(Color.white.opacity(0.36))
-                                        .overlay(
-                                            Capsule().stroke(Color.white.opacity(0.42), lineWidth: 0.5)
-                                        )
-                                )
-                        }
+            Text(Self.dateDayMonth.string(from: date.date))
+                .font(.system(size: 32, weight: .light))
+                .foregroundStyle(dateHeroColor(urgency))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+                .padding(.top, 22)
+            Text(date.title)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(BeSideColor.navyStart.opacity(0.84))
+                .lineLimit(2)
+                .padding(.top, 6)
+
+            Spacer(minLength: 44)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var datesTileEmptyContent: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Text("Important Dates")
+                .font(.system(size: 11, weight: .semibold))
+                .tracking(0.6)
+                .textCase(.uppercase)
+                .foregroundStyle(BeSideColor.navyStart.opacity(0.4))
+                .lineLimit(1)
+                .minimumScaleFactor(0.85)
+                .padding(.trailing, 72)
+
+            Text("No dates yet")
+                .font(.system(size: 16, weight: .medium))
+                .foregroundStyle(BeSideColor.navyStart.opacity(0.75))
+                .padding(.top, 8)
+            Text("Add a shared day")
+                .font(.system(size: 12, weight: .light))
+                .foregroundStyle(BeSideColor.navyStart.opacity(0.38))
+                .padding(.top, 4)
+
+            Spacer(minLength: 44)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .contentShape(Rectangle())
+    }
+
+    private var usAsksTile: some View {
+        let today = Calendar.current.startOfDay(for: Date())
+        let todayAsks = UsPartnerAsk.asks(on: today, from: store.partnerAsks)
+        let openAsks = todayAsks.filter { !$0.isDone }
+        let count = openAsks.count
+        /// Newest open ask only — tile never lists more than one preview.
+        let latestOpen = openAsks.max(by: { $0.createdAt < $1.createdAt })
+        let rose = Color(hex: 0xE8BEC9)
+
+        return Button {
+            openDatesDetail()
+        } label: {
+            ZStack {
+                // Soft rose wash — warm, distinct from Dates / Love Notes.
+                LinearGradient(
+                    colors: [
+                        rose.opacity(0.28),
+                        Color(hex: 0xFCE7F3).opacity(0.14),
+                        Color.clear,
+                    ],
+                    startPoint: .topTrailing,
+                    endPoint: .bottomLeading
+                )
+
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Little Things")
+                        .font(.system(size: 11, weight: .semibold))
+                        .tracking(0.6)
+                        .textCase(.uppercase)
+                        .foregroundStyle(BeSideColor.navyStart.opacity(0.4))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text("\(count)")
+                            .font(.system(size: 38, weight: .light, design: .rounded))
+                            .foregroundStyle(BeSideColor.navyStart.opacity(0.88))
+                            .monospacedDigit()
+
+                        Text("open today")
+                            .font(.system(size: 13, weight: .light))
+                            .foregroundStyle(BeSideColor.navyStart.opacity(0.42))
                     }
+                    .padding(.top, 10)
 
-                    Text(tileBodyText)
-                        .font(.system(size: 16, weight: tileKind == .incomingActive ? .bold : .medium))
-                        .foregroundStyle(Color.white)
-                        .multilineTextAlignment(.leading)
-                        .fixedSize(horizontal: false, vertical: true)
-
-                    if tileKind != .empty {
-                        Text(tileSubtitleText)
-                            .font(.system(size: 12, weight: .light))
-                            .foregroundStyle(Color.white.opacity(0.82))
+                    if let latest = latestOpen {
+                        let forName = latest.isAssignedToMe
+                            ? store.displayName
+                            : store.partnerDisplayName
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("For \(forName)")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(BeSideColor.navyStart.opacity(0.5))
+                            Text(latest.body)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(BeSideColor.navyStart.opacity(0.78))
+                                .lineLimit(2)
+                        }
+                        .padding(.top, 10)
+                        .padding(.trailing, 40)
+                    } else {
+                        Text(
+                            todayAsks.isEmpty
+                                ? "Ask each other for something small today."
+                                : "All done for today."
+                        )
+                            .font(.system(size: 13, weight: .light))
+                            .foregroundStyle(BeSideColor.navyStart.opacity(0.4))
+                            .lineLimit(3)
+                            .padding(.top, 8)
+                            .padding(.trailing, 40)
                     }
 
                     Spacer(minLength: 0)
                 }
                 .padding(12)
-                .padding(.bottom, 32)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .overlay(alignment: .bottomTrailing) {
+            Button {
+                openLittleThingsAdd(day: today)
+            } label: {
+                Image(systemName: "plus")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(Color.white.opacity(0.95))
+                    .frame(width: 34, height: 34)
+                    .background {
+                        Circle()
+                            .fill(BeSideColor.navyFill)
+                            .shadow(color: BeSideColor.navyStart.opacity(0.2), radius: 6, y: 2)
+                    }
+            }
+            .buttonStyle(.plain)
+            .padding(10)
+            .accessibilityLabel("Add a little thing")
+            .accessibilityIdentifier("us.tile.asks.add")
+        }
+        .aspectRatio(0.88, contentMode: .fit)
+        .beSideGlassChrome(cornerRadius: BeSideMetrics.glassCorner, style: .widgetFrosted)
+        .accessibilityLabel(
+            latestOpen.map { ask in
+                "\(count) little things open today. Latest: \(ask.body)."
+            } ?? "\(count) little things open today."
+        )
+        .accessibilityIdentifier("us.tile.asks")
+    }
+
+    private var usLoveNotesTile: some View {
+        let tileKind = store.loveNotesTileKind
+        let isActive = tileKind == .incomingActive
+
+        return ZStack(alignment: .bottomTrailing) {
+            Button {
+                dismissTips()
+                showLoveNotesPage = true
+            } label: {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 6) {
+                        Text("Love Notes")
+                            .font(.system(size: 11, weight: .semibold))
+                            .tracking(0.8)
+                            .textCase(.uppercase)
+                            .foregroundStyle(Color.white.opacity(0.55))
+                        Spacer(minLength: 0)
+                        if tileKind == .incomingActive {
+                            Text("\(store.incomingUnreadLoveNotes.count)")
+                                .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                                .foregroundStyle(BeSideColor.navyStart)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2)
+                                .background { Capsule().fill(Color.white.opacity(0.9)) }
+                        }
+                        if tileKind == .outgoingOnly {
+                            Text("\(store.outgoingLoveNotes.count) sent")
+                                .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                                .foregroundStyle(Color.white.opacity(0.9))
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background {
+                                    Capsule()
+                                        .fill(Color.white.opacity(0.18))
+                                        .overlay {
+                                            Capsule().stroke(Color.white.opacity(0.28), lineWidth: 0.5)
+                                        }
+                                }
+                        }
+                    }
+
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(BeSideColor.loveNotePinkBright)
+                        .padding(.top, 2)
+
+                    Text(tileBodyText)
+                        .font(.system(size: 14, weight: isActive ? .semibold : .medium))
+                        .foregroundStyle(BeSideColor.navyLabel)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if tileKind != .empty {
+                        Text(tileSubtitleText)
+                            .font(.system(size: 12, weight: .light))
+                            .foregroundStyle(Color.white.opacity(0.62))
+                    }
+
+                    Spacer(minLength: 0)
+                }
+                .padding(12)
+                .padding(.bottom, 36)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
-            Button(action: {
+            Button {
+                dismissTips()
                 withAnimation(.easeOut(duration: 0.2)) {
                     showLoveNoteCompose = true
                 }
-            }) {
-                matteIconLabel(systemName: "pencil", label: "Leave a love note", light: true)
+            } label: {
+                Image(systemName: "pencil")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.95))
+                    .frame(width: 34, height: 34)
+                    .background {
+                        Circle()
+                            .fill(Color.white.opacity(0.18))
+                            .overlay { Circle().stroke(Color.white.opacity(0.28), lineWidth: 0.8) }
+                    }
             }
-            .padding(8)
+            .buttonStyle(.plain)
+            .padding(10)
+            .accessibilityLabel("Leave a love note")
+            .accessibilityIdentifier("us.tile.lovenotes.compose")
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: isActive
-                            ? [
-                                Color(hex: 0xF490B8).opacity(0.98),
-                                Color(hex: 0xF078A8).opacity(0.94),
-                                Color(hex: 0xE86898).opacity(0.96),
-                              ]
-                            : [
-                                BeSideColor.loveNotePink.opacity(0.9),
-                                Color(hex: 0xF0A8C0).opacity(0.85),
-                                BeSideColor.loveNotePinkDeep.opacity(0.88),
-                              ],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(
-                            RadialGradient(
-                                colors: [Color.white.opacity(0.22), .clear],
-                                center: UnitPoint(x: 0.2, y: 0),
-                                startRadius: 0,
-                                endRadius: 160
-                            )
-                        )
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.white.opacity(isActive ? 0.5 : 0.4), lineWidth: 0.8)
-                }
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .shadow(
-            color: Color(hex: 0xC8648C).opacity(isActive ? 0.28 : 0.2),
-            radius: isActive ? 14 : 13,
-            y: 5
-        )
+        .aspectRatio(0.88, contentMode: .fit)
+        .background { usGlassChrome(.notes) }
+        .clipShape(RoundedRectangle(cornerRadius: BeSideMetrics.glassCorner, style: .continuous))
         .accessibilityLabel("Open love notes")
         .accessibilityIdentifier("us.tile.lovenotes")
+    }
+
+    private var usScreenTile: some View {
+        ZStack(alignment: .bottomTrailing) {
+            Button {
+                dismissTips()
+                showScreenPhotoPage = true
+            } label: {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text("Shared Moments")
+                        .font(.system(size: 11, weight: .semibold))
+                        .tracking(0.8)
+                        .textCase(.uppercase)
+                        .foregroundStyle(BeSideColor.navyStart.opacity(0.4))
+
+                    Spacer(minLength: 8)
+
+                    screenPhotoPreviewThumb
+
+                    Text("Send each other photos — keep one on a home-screen widget")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(BeSideColor.navyStart.opacity(0.78))
+                        .lineLimit(3)
+                        .padding(.top, 8)
+                        .padding(.trailing, 44)
+
+                    Spacer(minLength: 0)
+                }
+                .padding(12)
+                .padding(.bottom, 36)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                dismissTips()
+                showSharedMomentSourceSheet = true
+            } label: {
+                Image(systemName: "camera.fill")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.95))
+                    .frame(width: 34, height: 34)
+                    .background {
+                        Circle()
+                            .fill(BeSideColor.navyFill)
+                            .shadow(color: BeSideColor.navyStart.opacity(0.2), radius: 6, y: 2)
+                    }
+            }
+            .buttonStyle(.plain)
+            .padding(10)
+            .accessibilityLabel("Add a photo — camera or library")
+            .accessibilityIdentifier("us.tile.screen.camera")
+        }
+        .aspectRatio(0.88, contentMode: .fit)
+        .beSideGlassChrome(cornerRadius: BeSideMetrics.glassCorner, style: .widgetFrosted)
+        .accessibilityLabel(
+            "Shared Moments. Send each other photos — keep one on a home-screen widget."
+        )
+        .accessibilityIdentifier("us.screen.card")
+    }
+
+    private enum DateUrgency {
+        case upcoming, soon, tomorrow, today
+    }
+
+    private func dateUrgency(days: Int) -> DateUrgency {
+        if days <= 0 { return .today }
+        if days == 1 { return .tomorrow }
+        if days <= 3 { return .soon }
+        return .upcoming
+    }
+
+    private func dateHeroColor(_ urgency: DateUrgency) -> Color {
+        switch urgency {
+        case .upcoming: return BeSideColor.navyStart.opacity(0.55)
+        case .soon, .tomorrow: return BeSideColor.dateNear.opacity(0.82)
+        case .today: return BeSideColor.raspberry
+        }
+    }
+
+    @ViewBuilder
+    private func dateUrgencyBadge(days: Int, urgency: DateUrgency) -> some View {
+        let label: String = {
+            switch urgency {
+            case .today: return "Today"
+            case .tomorrow: return "Tomorrow"
+            default: return UsImportantDates.countdownLabel(days)
+            }
+        }()
+
+        Text(label)
+            .font(.system(size: 11, weight: .semibold))
+            .tracking(0.2)
+            .foregroundStyle(dateBadgeInk(urgency))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background { dateBadgeChrome(urgency) }
+    }
+
+    /// Figma Make Dates widget badge — quiet outlined pill (see Tomorrow screenshot) / today navy.
+    private func dateBadgeInk(_ urgency: DateUrgency) -> Color {
+        switch urgency {
+        case .today: return Color.white.opacity(0.96)
+        case .upcoming, .soon, .tomorrow: return BeSideColor.navyStart.opacity(0.46)
+        }
+    }
+
+    @ViewBuilder
+    private func dateBadgeChrome(_ urgency: DateUrgency) -> some View {
+        switch urgency {
+        case .today:
+            Capsule()
+                .fill(BeSideColor.navyFill)
+                .overlay {
+                    Capsule()
+                        .stroke(Color.white.opacity(0.22), lineWidth: 1)
+                }
+                .shadow(color: BeSideColor.navyStart.opacity(0.28), radius: 5, y: 2)
+        case .upcoming, .soon, .tomorrow:
+            Capsule()
+                .fill(Color.white.opacity(0.55))
+                .overlay {
+                    Capsule()
+                        .stroke(BeSideColor.navyStart.opacity(0.22), lineWidth: 1)
+                }
+        }
+    }
+
+    /// Soft pink wash only — no lilac (that made the badge read purple).
+    private func dateUrgencyWash(_ urgency: DateUrgency) -> some View {
+        let colors: [Color] = {
+            switch urgency {
+            case .upcoming:
+                return [Color(hex: 0xFCE7F3).opacity(0.14), Color.clear]
+            case .soon:
+                return [Color(hex: 0xFBCFE8).opacity(0.16), Color.clear]
+            case .tomorrow:
+                return [Color(hex: 0xFBCFE8).opacity(0.20), Color.clear]
+            case .today:
+                return [Color(hex: 0xFCE7F3).opacity(0.26), Color.clear]
+            }
+        }()
+        return LinearGradient(colors: colors, startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
+
+    private static let dateDayMonth: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_GB")
+        f.dateFormat = "d MMM"
+        return f
+    }()
+
+    private func loveNoteCard(note: LoveNote?, isPrimary: Bool) -> some View {
+        return Button {
+            dismissTips()
+            showLoveNotesPage = true
+            if let note, note.direction == .incoming {
+                loveNoteReading = note
+            }
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                if let note {
+                    let author = note.direction == .incoming
+                        ? store.partnerDisplayName
+                        : store.displayName
+
+                    Image(systemName: note.direction == .incoming ? "heart.fill" : "paperplane.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(
+                            note.direction == .incoming
+                                ? BeSideColor.raspberry.opacity(0.95)
+                                : BeSideColor.navyLabel
+                        )
+                        .frame(width: 24, height: 24)
+                        .background {
+                            Circle()
+                                .fill(
+                                    note.direction == .incoming
+                                        ? BeSideColor.loveNotePink.opacity(0.35)
+                                        : Color.white.opacity(0.16)
+                                )
+                        }
+
+                    Text("“\(LoveNoteBody.preview(note.body, max: 36))”")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(BeSideColor.navyLabel)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(2)
+
+                    Text("— \(author)")
+                        .font(.system(size: 11, weight: .light))
+                        .foregroundStyle(Color.white.opacity(0.62))
+                } else {
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(BeSideColor.raspberry.opacity(0.95))
+                        .frame(width: 24, height: 24)
+                        .background {
+                            Circle().fill(BeSideColor.loveNotePink.opacity(0.35))
+                        }
+
+                    Text(isPrimary ? tileBodyText : "Leave a note when you’re ready")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(BeSideColor.navyLabel)
+                        .multilineTextAlignment(.leading)
+                        .lineLimit(2)
+                }
+            }
+            .padding(10)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .background { usGlassChrome(.notes) }
+        .accessibilityLabel("Open love notes")
+        .accessibilityIdentifier(isPrimary ? "us.tile.lovenotes.card" : "us.tile.lovenotes.card.secondary")
+    }
+
+    private enum UsCardTint {
+        case notes, screen
+    }
+
+    /// Navy Love Notes + white Screen cards.
+    @ViewBuilder
+    private func usGlassChrome(_ tint: UsCardTint) -> some View {
+        let corner = BeSideMetrics.glassCorner
+        switch tint {
+        case .notes:
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
+                .fill(BeSideColor.navyFill)
+                .overlay {
+                    RoundedRectangle(cornerRadius: corner, style: .continuous)
+                        .stroke(Color.white.opacity(0.14), lineWidth: 1)
+                }
+                .shadow(color: BeSideColor.navyStart.opacity(0.28), radius: 16, y: 8)
+        case .screen:
+            RoundedRectangle(cornerRadius: corner, style: .continuous)
+                .fill(Color.white.opacity(0.82))
+                .overlay {
+                    RoundedRectangle(cornerRadius: corner, style: .continuous)
+                        .stroke(Color.white.opacity(0.55), lineWidth: 1)
+                }
+                .shadow(color: ink.opacity(0.08), radius: 18, y: 8)
+                .environment(\.colorScheme, .light)
+        }
+    }
+
+    private func sectionChromeIcon(systemName: String, label: String) -> some View {
+        Image(systemName: systemName)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(ink.opacity(0.48))
+            .frame(width: 30, height: 30)
+            .background {
+                Circle()
+                    .fill(Color.white.opacity(0.5))
+                    .overlay {
+                        Circle().stroke(ink.opacity(0.1), lineWidth: 1)
+                    }
+            }
+            .accessibilityLabel(label)
     }
 
     private var tileBodyText: String {
@@ -1100,234 +1629,6 @@ struct UsView: View {
         case .empty: return ""
         case .outgoingOnly: return "Waiting for them to open"
         case .incomingActive: return "Tap to open"
-        }
-    }
-
-    private var sharedMemoriesSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .top, spacing: 0) {
-                Button {
-                    dismissTips()
-                    showSharedMemoriesPage = true
-                } label: {
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text("Shared Memories")
-                            .font(.system(size: 12, weight: .light))
-                            .tracking(1.6)
-                            .textCase(.uppercase)
-                            .foregroundStyle(ink.opacity(0.56))
-                        Text("Cherish the moments that matter to both of you.")
-                            .font(.system(size: 11, weight: .light))
-                            .foregroundStyle(ink.opacity(0.42))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.trailing, 36)
-                    .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Open Shared Memories gallery")
-                .accessibilityIdentifier("us.memories")
-            }
-
-            if store.sharedMemories.isEmpty {
-                Text("Add your first shared moment")
-                    .font(.system(size: 12, weight: .light))
-                    .foregroundStyle(ink.opacity(0.4))
-                    .frame(maxWidth: .infinity)
-                    .padding(.top, 16)
-                    .padding(.bottom, 8)
-            } else {
-                memoryCarousel
-                    .padding(.top, 12)
-
-                if store.sharedMemories.count > 1 {
-                    memoryDots
-                        .padding(.top, 12)
-                }
-            }
-        }
-        .padding(.horizontal, 12)
-        .padding(.top, 10)
-        .padding(.bottom, 14)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color.white.opacity(0.42))
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.white.opacity(0.55), lineWidth: 0.8)
-                }
-        }
-        .overlay(alignment: .top) {
-            Capsule()
-                .fill(Color.white.opacity(0.6))
-                .frame(height: 1)
-                .padding(.horizontal, 1)
-        }
-        .overlay(alignment: .topTrailing) {
-            Button {
-                dismissTips()
-                withAnimation(.easeOut(duration: 0.2)) {
-                    editingMemory = nil
-                    showSharedMemoryAdd = true
-                }
-            } label: {
-                Image(systemName: "plus")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(ink.opacity(0.56))
-                    .frame(width: 28, height: 28)
-                    .background {
-                        Circle()
-                            .fill(Color.white.opacity(0.44))
-                            .overlay {
-                                Circle().stroke(ink.opacity(0.15), lineWidth: 1.5)
-                            }
-                            .shadow(color: ink.opacity(0.06), radius: 6, y: 2)
-                    }
-            }
-            .buttonStyle(.plain)
-            .padding(8)
-            .accessibilityLabel("Add a memory")
-            .accessibilityIdentifier("us.memories.add")
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .shadow(color: Color.black.opacity(0.06), radius: 10, y: 4)
-    }
-
-    private var memoryCarousel: some View {
-        let cardWidth: CGFloat = 168
-        let gap: CGFloat = 12
-        return ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: gap) {
-                ForEach(Array(store.sharedMemories.enumerated()), id: \.element.id) { index, memory in
-                    memoryCarouselCard(memory, isActive: index == memoryCarouselIndex)
-                        .frame(width: cardWidth)
-                        .id(memory.id)
-                        .scrollTransition { content, phase in
-                            content
-                                .opacity(phase.isIdentity ? 1 : 0.85)
-                                .scaleEffect(phase.isIdentity ? 1 : 0.97)
-                        }
-                }
-            }
-            .scrollTargetLayout()
-            .padding(.horizontal, 6)
-            .padding(.vertical, 8)
-        }
-        .scrollTargetBehavior(.viewAligned)
-        .scrollPosition(id: Binding(
-            get: {
-                store.sharedMemories.indices.contains(memoryCarouselIndex)
-                    ? store.sharedMemories[memoryCarouselIndex].id
-                    : nil
-            },
-            set: { newID in
-                if let newID, let idx = store.sharedMemories.firstIndex(where: { $0.id == newID }) {
-                    memoryCarouselIndex = idx
-                }
-            }
-        ))
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 8)
-                .onChanged { _ in memoryCarouselDragged = true }
-                .onEnded { _ in
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                        memoryCarouselDragged = false
-                    }
-                }
-        )
-        .accessibilityIdentifier("us.memories.carousel")
-    }
-
-    private func memoryCarouselCard(_ memory: UsSharedMemory, isActive: Bool) -> some View {
-        let hasPhoto = UsSharedMemories.hasPhoto(memory)
-        return VStack(alignment: .leading, spacing: 0) {
-            ZStack(alignment: .topTrailing) {
-                SharedMemoryPhotoView(memory: memory)
-                .frame(height: 118)
-                .frame(maxWidth: .infinity)
-                .clipped()
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    guard !memoryCarouselDragged else { return }
-                    dismissTips()
-                    openMemoryFeed(startingAt: memory.id)
-                }
-
-                ShareLink(item: UsSharedMemories.shareText(for: memory)) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(ink.opacity(0.56))
-                        .frame(width: 28, height: 28)
-                        .background {
-                            Circle()
-                                .fill(Color.white.opacity(0.72))
-                                .overlay {
-                                    Circle().stroke(Color.white.opacity(0.85), lineWidth: 1)
-                                }
-                                .shadow(color: ink.opacity(0.1), radius: 6, y: 2)
-                        }
-                }
-                .buttonStyle(.plain)
-                .padding(8)
-                .accessibilityLabel("Share \(memory.title)")
-            }
-
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(alignment: .top, spacing: 6) {
-                    if hasPhoto {
-                        Text(memory.mood)
-                            .font(.system(size: 13))
-                            .padding(.top, 1)
-                    }
-                    Text(memory.title)
-                        .font(.system(size: 12.5, weight: .medium))
-                        .foregroundStyle(ink.opacity(0.88))
-                        .lineLimit(2)
-                        .multilineTextAlignment(.leading)
-                }
-                Text(UsSharedMemories.shortDateLabel(memory.dateTime))
-                    .font(.system(size: 10, weight: .light))
-                    .foregroundStyle(ink.opacity(0.4))
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .frame(minHeight: 68, alignment: .center)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(Rectangle())
-            .onTapGesture {
-                guard !memoryCarouselDragged else { return }
-                dismissTips()
-                openMemoryFeed(startingAt: memory.id)
-            }
-        }
-        .background {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(Color.white.opacity(0.72))
-        }
-        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-        .overlay {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(
-                    isActive ? Color.white.opacity(0.9) : Color.white.opacity(0.55),
-                    lineWidth: isActive ? 1.2 : 0.8
-                )
-        }
-        .shadow(
-            color: Color.black.opacity(isActive ? 0.1 : 0.05),
-            radius: isActive ? 14 : 8,
-            y: isActive ? 6 : 3
-        )
-        .accessibilityElement(children: .contain)
-        .accessibilityLabel("Open memory \(memory.title)")
-        .accessibilityIdentifier("us.memories.card.\(memory.id)")
-        .accessibilityAction {
-            openMemoryFeed(startingAt: memory.id)
         }
     }
 
@@ -1359,56 +1660,8 @@ struct UsView: View {
             editingMemory = nil
             showSharedMemoryAdd = false
         }
-        if memoryCarouselIndex >= store.sharedMemories.count {
-            memoryCarouselIndex = max(0, store.sharedMemories.count - 1)
-        }
     }
 
-    private var memoryDots: some View {
-        HStack(spacing: 6) {
-            ForEach(Array(store.sharedMemories.enumerated()), id: \.element.id) { index, _ in
-                let active = index == memoryCarouselIndex
-                Button {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.86)) {
-                        memoryCarouselIndex = index
-                    }
-                } label: {
-                    Capsule()
-                        .fill(active ? BeSideColor.navyStart : Color.clear)
-                        .frame(width: active ? 16 : 6, height: 6)
-                        .overlay {
-                            Capsule()
-                                .stroke(
-                                    active ? BeSideColor.navyStart : BeSideColor.navyStart.opacity(0.45),
-                                    lineWidth: 1.5
-                                )
-                        }
-                        .opacity(active ? 1 : 0.55)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Memory \(index + 1)")
-            }
-        }
-        .frame(maxWidth: .infinity)
-    }
-
-    private func matteIconLabel(systemName: String, label: String, light: Bool = false) -> some View {
-        Image(systemName: systemName)
-            .font(.system(size: 15, weight: .semibold))
-            .foregroundStyle(light ? Color.white.opacity(0.9) : ink.opacity(0.56))
-            .frame(width: 38, height: 38)
-            .background {
-                Circle()
-                    .fill(Color.white.opacity(light ? 0.28 : 0.44))
-                    .overlay {
-                        Circle().stroke(
-                            light ? Color.white.opacity(0.35) : ink.opacity(0.15),
-                            lineWidth: 1.5
-                        )
-                    }
-            }
-            .accessibilityLabel(label)
-    }
 }
 
 #Preview {

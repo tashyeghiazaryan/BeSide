@@ -1,6 +1,6 @@
 import Foundation
 
-/// Long-term level ladder for the Us progress bar (Figma Make `US_LONG_TERM_LEVELS`).
+/// Quiet together-milestone ladder for Us (Figma Make `US_LONG_TERM_LEVELS`).
 enum UsLongTermLevels {
     struct Level: Sendable {
         let level: Int

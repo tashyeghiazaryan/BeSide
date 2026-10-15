@@ -159,6 +159,7 @@ create table public.important_dates (
   accent_hex text,
   system_image text,
   icon_preset text,
+  note text check (note is null or char_length(note) <= 80),
   created_by uuid references public.profiles (id),
   created_at timestamptz not null default now()
 );

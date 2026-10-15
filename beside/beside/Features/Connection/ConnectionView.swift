@@ -3,6 +3,7 @@ import SwiftUI
 /// Connection tab — Figma Make `ConnectionScreen` carousel + Today's Activity hub.
 struct ConnectionView: View {
     @Bindable var store: MeSessionStore
+    var session: AppSessionStore? = nil
 
     @State private var slides = ConnectionCarousel.demoSlides()
     @State private var carouselIndex = 0
@@ -120,9 +121,10 @@ struct ConnectionView: View {
             scheduleAutoAdvance(token: token)
         }
         // Dark tab chrome only over the carousel; light bar inside hubs / Sections.
-        .prefersDarkFloatingTabBar(!isOverlayOpen)
+        .prefersDarkFloatingTabBar(!isOverlayOpen && store.isPaired)
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(AppTab.connection.screenIdentifier)
+        .pairingRequiredGate(store: store, session: session)
     }
 
     private func carouselLayer(size: CGSize) -> some View {

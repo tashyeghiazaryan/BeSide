@@ -938,26 +938,6 @@ struct PartnerQuizHub: View {
                 }
                 .padding(.top, 4)
 
-                HStack(spacing: 8) {
-                    Image(systemName: "sparkles")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(BeSideColor.navyStart.opacity(0.85))
-                    Text("+\(store.partnerQuizPointsEarned) pts")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(ink.opacity(0.9))
-                    Text(resultsPointsHint)
-                        .font(.system(size: 14, weight: .regular))
-                        .foregroundStyle(Color.black.opacity(0.42))
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background {
-                    Capsule()
-                        .fill(BeSideColor.navyStart.opacity(0.07))
-                }
-                .accessibilityElement(children: .combine)
-                .accessibilityIdentifier("connection.quiz.points")
-                .padding(.top, 4)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 26)
@@ -978,7 +958,7 @@ struct PartnerQuizHub: View {
                 _ = store.claimPartnerQuizReward()
                 onClose()
             } label: {
-                Text("Claim & Reconnect")
+                Text("Continue")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(Color.white)
                     .frame(maxWidth: .infinity)
@@ -1027,15 +1007,6 @@ struct PartnerQuizHub: View {
         case 2: return "Even split — keep reading \(name)."
         case 3: return "Nearly a perfect read on \(name)."
         default: return "Perfect read on \(name)."
-        }
-    }
-
-    private var resultsPointsHint: String {
-        switch store.partnerQuizRole {
-        case .guessing:
-            return "from guesses"
-        case .answering:
-            return "for your truths"
         }
     }
 
