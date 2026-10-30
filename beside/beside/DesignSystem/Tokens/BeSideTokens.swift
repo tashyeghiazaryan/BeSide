@@ -65,13 +65,13 @@ enum BeSideBackground {
         )
     }
 
-    /// Us / home widgets wallpaper — warm soft neutral, slightly brighter.
+    /// Us / home widgets wallpaper — warm soft neutral, slightly deeper so white plates separate.
     static var widgetCanvas: LinearGradient {
         LinearGradient(
             colors: [
-                Color(hex: 0xFAF8F7),
-                Color.white,
-                Color(hex: 0xF5F3F2),
+                Color(hex: 0xF3F1F0),
+                Color(hex: 0xF7F5F4),
+                Color(hex: 0xEEECEA),
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
