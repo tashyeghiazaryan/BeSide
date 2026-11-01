@@ -166,6 +166,24 @@ struct ConnectionView: View {
                     .padding(.top, 10)
                 }
 
+                if store.coupleSurfaceState == .pairedWaiting {
+                    Text("Waiting for \(store.partnerDisplayName) to join today’s prompts")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color.white.opacity(0.82))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background {
+                            Capsule()
+                                .fill(Color.black.opacity(0.35))
+                                .overlay {
+                                    Capsule().stroke(Color.white.opacity(0.2), lineWidth: 0.8)
+                                }
+                        }
+                        .padding(.top, 12)
+                        .accessibilityIdentifier("connection.waiting.banner")
+                }
+
                 Spacer(minLength: 0)
             }
 
@@ -421,6 +439,14 @@ struct ConnectionView: View {
     }
 }
 
-#Preview {
-    ConnectionView(store: MeSessionStore())
+#Preview("Connection · paired active") {
+    ConnectionView(store: .previewPairedActive())
+}
+
+#Preview("Connection · paired waiting") {
+    ConnectionView(store: .previewPairedWaiting())
+}
+
+#Preview("Connection · unpaired") {
+    ConnectionView(store: .previewUnpaired())
 }

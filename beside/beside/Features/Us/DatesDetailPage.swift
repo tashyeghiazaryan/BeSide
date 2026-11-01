@@ -40,9 +40,6 @@ struct DatesDetailPage: View {
         .onAppear {
             // Always open on today — do not jump to the nearest Important Date.
             selectedDay = calendar.startOfDay(for: Date())
-            if store.partnerAsks.isEmpty {
-                store.partnerAsks = UsPartnerAsk.demoSeed()
-            }
         }
     }
 

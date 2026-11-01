@@ -74,6 +74,13 @@ final class MeSessionStore {
     /// Demo defaults paired; Supabase mode starts unpaired until membership syncs.
     var isPaired: Bool = !BackendConfiguration.usesSupabase
     var inviteCode: String = "BESIDE-4K2M"
+
+    /// Runtime couple UI surface: unpaired vs waiting on partner data vs active shared life.
+    enum CoupleSurfaceState: Equatable, Sendable {
+        case unpaired
+        case pairedWaiting
+        case pairedActive
+    }
     /// Your emoji reaction to the partner's mood.
     var myReactionToPartner: String?
     /// Your short note about the partner's mood.
@@ -155,6 +162,48 @@ final class MeSessionStore {
         partnerCurrentMood.mood != nil
     }
 
+    /// Partner contributed any couple-visible content (not just a placeholder name).
+    var partnerHasSharedData: Bool {
+        if partnerMoodSharedToday { return true }
+        if partnerAvatarJPEG != nil { return true }
+        if !incomingLoveNotes.isEmpty { return true }
+        if partnerAsks.contains(where: { $0.author == .partner }) { return true }
+        if !partnerWishlist.isEmpty { return true }
+        if let answer = partnerQuestionAnswer?
+            .trimmingCharacters(in: .whitespacesAndNewlines), !answer.isEmpty {
+            return true
+        }
+        if partnerDailySubmittedToday || partnerActivityDoneToday { return true }
+        if partnerHistory.contains(where: { $0.mood != nil }) { return true }
+        return false
+    }
+
+    var coupleSurfaceState: CoupleSurfaceState {
+        guard isPaired else { return .unpaired }
+        return partnerHasSharedData ? .pairedActive : .pairedWaiting
+    }
+
+    /// Hero title for Us — adapts when unpaired or still waiting on them.
+    var coupleHeroTitle: String {
+        switch coupleSurfaceState {
+        case .unpaired:
+            return displayName
+        case .pairedWaiting, .pairedActive:
+            return "\(displayName) & \(partnerDisplayName)"
+        }
+    }
+
+    var coupleHeroSubtitle: String {
+        switch coupleSurfaceState {
+        case .unpaired:
+            return "Connect with your partner to unlock Us"
+        case .pairedWaiting:
+            return "Waiting for \(partnerDisplayName) to share their first moments"
+        case .pairedActive:
+            return timeTogetherPhrase
+        }
+    }
+
     /// You reacted to partner’s mood.
     var meCheckedPartnerMoodToday: Bool {
         myReactionToPartner != nil
@@ -183,8 +232,31 @@ final class MeSessionStore {
         return min(1, max(0, Double(usLongTermPoints) / Double(goal)))
     }
 
+    /// How Us shows “together for …” — cycles on subtitle tap (local preference).
+    var timeTogetherStyle: UsTimeTogether.Style = .detailed {
+        didSet { Self.saveTimeTogetherStyle(timeTogetherStyle) }
+    }
+
     var timeTogetherPhrase: String {
-        UsTimeTogether.phrase(since: relationshipStartDate)
+        UsTimeTogether.phrase(since: relationshipStartDate, style: timeTogetherStyle)
+    }
+
+    func cycleTimeTogetherStyle() {
+        timeTogetherStyle = timeTogetherStyle.next
+    }
+
+    private static let timeTogetherStyleKey = "beside.us.timeTogetherStyle"
+
+    private static func loadTimeTogetherStyle() -> UsTimeTogether.Style {
+        guard let raw = UserDefaults.standard.string(forKey: timeTogetherStyleKey),
+              let style = UsTimeTogether.Style(rawValue: raw) else {
+            return .detailed
+        }
+        return style
+    }
+
+    private static func saveTimeTogetherStyle(_ style: UsTimeTogether.Style) {
+        UserDefaults.standard.set(style.rawValue, forKey: timeTogetherStyleKey)
     }
 
     /// All dates sorted by soonest occurrence (past dates last by daysUntil).
@@ -243,55 +315,143 @@ final class MeSessionStore {
         max(0, usTileRotatingDates.count - 1)
     }
 
-    init(history: [SharedMood]? = nil, partnerCurrentMood: SharedMood? = nil) {
-        self.history = history ?? Self.makeSeedHistory()
-        let partnerMood = partnerCurrentMood ?? Self.makeSeedPartnerMood()
-        self.partnerCurrentMood = partnerMood
-        self.partnerHistory = Self.makeSeedPartnerHistory(current: partnerMood)
-        if let response = Self.seedMyResponseToPartner {
-            self.myReactionToPartner = response.reaction
-            self.myNoteToPartner = response.note
-        }
+    /// - Parameter loadDemoSeeds: When `nil`, seeds load only in local demo mode (not Supabase).
+    ///   Previews pass `true`/`false` explicitly for the three couple surface states.
+    init(
+        history: [SharedMood]? = nil,
+        partnerCurrentMood: SharedMood? = nil,
+        loadDemoSeeds: Bool? = nil
+    ) {
+        let useSeeds = loadDemoSeeds ?? !BackendConfiguration.usesSupabase
         let relationshipStart = Self.makeSeedRelationshipStart()
         self.relationshipStartDate = relationshipStart
-        self.usLongTermLevel = 7
-        self.usLongTermPoints = 420
-        self.usStreakDays = 3
+        self.timeTogetherStyle = Self.loadTimeTogetherStyle()
+        self.usLongTermLevel = useSeeds ? 7 : 1
+        self.usLongTermPoints = useSeeds ? 420 : 0
+        self.usStreakDays = useSeeds ? 3 : 0
         self.meActivityDoneToday = false
         self.partnerActivityDoneToday = false
         self.meDailySubmittedToday = false
         self.partnerDailySubmittedToday = false
-        self.connectionPendingAnswers = ConnectionPendingAnswers.demoSeed(partnerName: "Alex")
         self.connectionDailyPhase = .closed
         self.questionOfTheDayPrompt = QuestionOfTheDay.defaultPrompt
         self.meQuestionAnswer = nil
         self.partnerQuestionAnswer = nil
-        self.partnerQuizQuestions = PartnerQuiz.demoSeed(partnerName: "Alex")
         self.partnerQuizIndex = 0
         self.partnerQuizSelectedOptionID = nil
         self.partnerQuizGuesses = [:]
         self.partnerQuizPhase = .howToPlay
-        // Demo seed: you guess; partner already answered (matches locked truths).
         self.partnerQuizRole = .guessing
         self.partnerQuizRewardClaimed = false
-        // Demo: start free; role screen can unlock Premium without billing.
         self.isPremium = false
         self.customPartnerQuizQuestion = nil
-        self.importantDates = UsImportantDates.makeSeedDates(
-            relationshipStart: relationshipStart,
-            partnerName: "Alex"
-        )
-        self.partnerAsks = UsPartnerAsk.demoSeed()
         self.myWishlist = []
-        self.partnerWishlist = UsWishlist.partnerSeed()
         self.wishlistHistory = []
-        self.loveNotes = LoveNote.demoSeed()
-        self.sharedMemories = UsSharedMemories.demoSeed()
         self.sharedMomentPhotoJPEG = nil
-        self.notifications = UsNotifications.demoSeed(partnerName: "Alex")
         self.meAvatarJPEG = AvatarDiskCache.load()
-        // Fill any live-derived events not already covered by the static demo seed.
+
+        if useSeeds {
+            self.history = history ?? Self.makeSeedHistory()
+            let partnerMood = partnerCurrentMood ?? Self.makeSeedPartnerMood()
+            self.partnerCurrentMood = partnerMood
+            self.partnerHistory = Self.makeSeedPartnerHistory(current: partnerMood)
+            if let response = Self.seedMyResponseToPartner {
+                self.myReactionToPartner = response.reaction
+                self.myNoteToPartner = response.note
+            }
+            self.connectionPendingAnswers = ConnectionPendingAnswers.demoSeed(partnerName: "Alex")
+            self.partnerQuizQuestions = PartnerQuiz.demoSeed(partnerName: "Alex")
+            self.importantDates = UsImportantDates.makeSeedDates(
+                relationshipStart: relationshipStart,
+                partnerName: "Alex"
+            )
+            self.partnerAsks = UsPartnerAsk.demoSeed()
+            self.partnerWishlist = UsWishlist.partnerSeed()
+            self.loveNotes = LoveNote.demoSeed()
+            self.sharedMemories = UsSharedMemories.demoSeed()
+            self.notifications = UsNotifications.demoSeed(partnerName: "Alex")
+            self.isPaired = true
+            self.displayName = "Anna"
+            self.partnerDisplayName = "Alex"
+        } else {
+            self.history = history ?? []
+            let partnerMood = partnerCurrentMood ?? Self.makeEmptyPartnerMood()
+            self.partnerCurrentMood = partnerMood
+            self.partnerHistory = []
+            self.myReactionToPartner = nil
+            self.myNoteToPartner = nil
+            self.connectionPendingAnswers = []
+            self.partnerQuizQuestions = []
+            self.importantDates = []
+            self.partnerAsks = []
+            self.partnerWishlist = []
+            self.loveNotes = []
+            self.sharedMemories = []
+            self.notifications = []
+            self.isPaired = false
+            self.partnerDisplayName = "Partner"
+        }
+
         refreshNotificationSources()
+    }
+
+    /// Preview / DEBUG: unpaired empty store.
+    static func previewUnpaired() -> MeSessionStore {
+        MeSessionStore(loadDemoSeeds: false)
+    }
+
+    /// Preview / DEBUG: paired, no partner-contributed content yet.
+    static func previewPairedWaiting(partnerName: String = "Alex") -> MeSessionStore {
+        let store = MeSessionStore(loadDemoSeeds: false)
+        store.isPaired = true
+        store.partnerDisplayName = partnerName
+        store.displayName = "Anna"
+        return store
+    }
+
+    /// Preview / DEBUG: full demo seeds (current design reference).
+    static func previewPairedActive() -> MeSessionStore {
+        MeSessionStore(loadDemoSeeds: true)
+    }
+
+    /// Clear couple + shared session data when returning to Auth (`needsAuth`).
+    /// Does not wipe the local avatar cache file — only in-memory partner/shared state.
+    func resetAfterSignOut() {
+        detachLiveBackend()
+        disconnectPartner()
+        history = []
+        partnerCurrentMood = Self.makeEmptyPartnerMood()
+        partnerHistory = []
+        myReactionToPartner = nil
+        myNoteToPartner = nil
+        connectionPendingAnswers = []
+        meActivityDoneToday = false
+        partnerActivityDoneToday = false
+        meDailySubmittedToday = false
+        partnerDailySubmittedToday = false
+        connectionDailyPhase = .closed
+        meQuestionAnswer = nil
+        partnerQuestionAnswer = nil
+        partnerQuizQuestions = []
+        partnerQuizIndex = 0
+        partnerQuizSelectedOptionID = nil
+        partnerQuizGuesses = [:]
+        partnerQuizPhase = .howToPlay
+        partnerQuizRewardClaimed = false
+        customPartnerQuizQuestion = nil
+        importantDates = []
+        partnerAsks = []
+        myWishlist = []
+        partnerWishlist = []
+        wishlistHistory = []
+        loveNotes = []
+        sharedMemories = []
+        sharedMomentPhotoJPEG = nil
+        notifications = []
+        expandedPartnerDayKey = nil
+        usLongTermLevel = 1
+        usLongTermPoints = 0
+        usStreakDays = 0
     }
 
     /// Saves avatar locally and uploads to Supabase when live backend is attached.
@@ -1418,6 +1578,11 @@ final class MeSessionStore {
     nonisolated static func dayKey(_ date: Date, calendar: Calendar = .current) -> String {
         let comps = calendar.dateComponents([.year, .month, .day], from: date)
         return String(format: "%04d-%02d-%02d", comps.year ?? 0, comps.month ?? 0, comps.day ?? 0)
+    }
+
+    /// Placeholder partner mood with no catalog mood (empty Partner hero).
+    nonisolated static func makeEmptyPartnerMood(now: Date = Date()) -> SharedMood {
+        SharedMood(moodID: "", wish: "", timestamp: now)
     }
 
     /// Figma Make Partner hero defaults to stressed.

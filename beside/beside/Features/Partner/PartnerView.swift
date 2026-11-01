@@ -128,12 +128,18 @@ struct PartnerView: View {
                                     .padding(.bottom, 24)
                             } else {
                                 GlassPanel {
-                                    Text("\(store.partnerDisplayName) hasn’t shared a mood yet")
-                                        .font(.system(size: 16, weight: .light))
-                                        .foregroundStyle(BeSideColor.textMuted)
-                                        .multilineTextAlignment(.center)
-                                        .frame(maxWidth: .infinity)
-                                        .padding(20)
+                                    VStack(spacing: 8) {
+                                        Text(partnerEmptyMoodTitle)
+                                            .font(.system(size: 16, weight: .medium))
+                                            .foregroundStyle(BeSideColor.textPrimary)
+                                            .multilineTextAlignment(.center)
+                                        Text(partnerEmptyMoodSubtitle)
+                                            .font(.system(size: 15, weight: .light))
+                                            .foregroundStyle(BeSideColor.textMuted)
+                                            .multilineTextAlignment(.center)
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(20)
                                 }
                                 .padding(.bottom, 28)
                             }
@@ -635,10 +641,44 @@ struct PartnerView: View {
         }
     }
 
+    private var partnerEmptyMoodTitle: String {
+        switch store.coupleSurfaceState {
+        case .unpaired:
+            return "Connect with your partner"
+        case .pairedWaiting:
+            return "Waiting on \(store.partnerDisplayName)"
+        case .pairedActive:
+            return "\(store.partnerDisplayName) hasn’t shared a mood yet"
+        }
+    }
+
+    private var partnerEmptyMoodSubtitle: String {
+        switch store.coupleSurfaceState {
+        case .unpaired:
+            return "Pair to see how they feel today."
+        case .pairedWaiting:
+            return "They’re connected — when they share a mood, it will show up here."
+        case .pairedActive:
+            return "Check back after they pick a mood on Me."
+        }
+    }
+
     private static func formatTimestamp(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.dateFormat = "MMM d 'at' HH:mm"
         return formatter.string(from: date)
     }
+}
+
+#Preview("Partner · paired active") {
+    PartnerView(store: .previewPairedActive())
+}
+
+#Preview("Partner · paired waiting") {
+    PartnerView(store: .previewPairedWaiting())
+}
+
+#Preview("Partner · unpaired") {
+    PartnerView(store: .previewUnpaired())
 }

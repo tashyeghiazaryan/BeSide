@@ -65,65 +65,65 @@ enum BeSideBackground {
         )
     }
 
-    /// Us / home widgets wallpaper — warm soft neutral, slightly brighter.
+    /// Us / home widgets wallpaper — brighter pastel wash so frosted white tiles separate.
     static var widgetCanvas: LinearGradient {
         LinearGradient(
             colors: [
-                Color(hex: 0xFAF8F7),
-                Color.white,
-                Color(hex: 0xF5F3F2),
+                Color(hex: 0xFFF5F8),
+                Color(hex: 0xF7F5FC),
+                Color(hex: 0xF3F0F8),
             ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
     }
 
-    /// Soft pink/lilac wash for the widget wallpaper (very light, top-left bias).
+    /// Soft pink/lilac wash for the widget wallpaper (brighter bias).
     static func widgetAmbientBlobs() -> some View {
         ZStack {
             Circle()
                 .fill(
                     RadialGradient(
                         colors: [
-                            Color(hex: 0xFCE7F3).opacity(0.62),
+                            Color(hex: 0xFBCFE8).opacity(0.72),
                             Color(hex: 0xFCE7F3).opacity(0.0),
                         ],
                         center: .center,
                         startRadius: 20,
-                        endRadius: 220
+                        endRadius: 240
                     )
                 )
-                .frame(width: 420, height: 420)
+                .frame(width: 440, height: 440)
                 .offset(x: -90, y: -160)
 
             Circle()
                 .fill(
                     RadialGradient(
                         colors: [
-                            Color(hex: 0xE0E7FF).opacity(0.38),
+                            Color(hex: 0xC7D2FE).opacity(0.48),
                             Color(hex: 0xE0E7FF).opacity(0.0),
                         ],
                         center: .center,
                         startRadius: 10,
-                        endRadius: 200
+                        endRadius: 210
                     )
                 )
-                .frame(width: 360, height: 360)
+                .frame(width: 380, height: 380)
                 .offset(x: 130, y: 280)
 
             Circle()
                 .fill(
                     RadialGradient(
                         colors: [
-                            Color(hex: 0xDDD6FE).opacity(0.26),
+                            Color(hex: 0xDDD6FE).opacity(0.4),
                             Color.clear,
                         ],
                         center: .center,
                         startRadius: 8,
-                        endRadius: 160
+                        endRadius: 170
                     )
                 )
-                .frame(width: 280, height: 280)
+                .frame(width: 300, height: 300)
                 .offset(x: 40, y: 40)
         }
         .allowsHitTesting(false)

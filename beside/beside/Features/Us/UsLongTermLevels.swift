@@ -60,23 +60,61 @@ enum UsLongTermLevels {
     }
 }
 
-/// Figma Make `calculateTimeTogether`.
+/// Figma Make `calculateTimeTogether` — display styles cycle on Us hero tap.
 enum UsTimeTogether {
-    static func phrase(since startDate: Date, now: Date = Date()) -> String {
-        let diffMs = now.timeIntervalSince(startDate)
-        let diffDays = Int(floor(diffMs / (60 * 60 * 24)))
-        let years = diffDays / 365
-        let months = (diffDays % 365) / 30
-        let days = diffDays % 30
-        if years > 0 {
-            if months > 0 {
-                return "together for \(years) year\(years == 1 ? "" : "s") and \(months) month\(months == 1 ? "" : "s")"
+    /// Cycle order on tap: detailed → days only → since date.
+    enum Style: String, CaseIterable, Sendable {
+        case detailed
+        case daysOnly
+        case sinceDate
+
+        var next: Style {
+            switch self {
+            case .detailed: return .daysOnly
+            case .daysOnly: return .sinceDate
+            case .sinceDate: return .detailed
             }
-            return "together for \(years) year\(years == 1 ? "" : "s")"
         }
-        if months > 0 {
-            return "together for \(months) month\(months == 1 ? "" : "s")"
+    }
+
+    private static let sinceFormatter: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_GB")
+        f.dateFormat = "d MMM yyyy"
+        return f
+    }()
+
+    static func phrase(
+        since startDate: Date,
+        style: Style = .detailed,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> String {
+        let start = calendar.startOfDay(for: startDate)
+        let end = calendar.startOfDay(for: now)
+
+        switch style {
+        case .daysOnly:
+            let days = max(0, calendar.dateComponents([.day], from: start, to: end).day ?? 0)
+            return "together for \(days) day\(days == 1 ? "" : "s")"
+        case .sinceDate:
+            return "since \(sinceFormatter.string(from: start))"
+        case .detailed:
+            let parts = calendar.dateComponents([.year, .month, .day], from: start, to: end)
+            let years = max(0, parts.year ?? 0)
+            let months = max(0, parts.month ?? 0)
+            let days = max(0, parts.day ?? 0)
+            var chunks: [String] = []
+            if years > 0 {
+                chunks.append("\(years) year\(years == 1 ? "" : "s")")
+            }
+            if months > 0 {
+                chunks.append("\(months) month\(months == 1 ? "" : "s")")
+            }
+            if days > 0 || chunks.isEmpty {
+                chunks.append("\(days) day\(days == 1 ? "" : "s")")
+            }
+            return "together for \(chunks.joined(separator: ", "))"
         }
-        return "together for \(days) day\(days == 1 ? "" : "s")"
     }
 }

@@ -329,3 +329,7 @@ struct AuthGateView: View {
         }
     }
 }
+
+#Preview("Auth · email") {
+    AuthGateView(session: AppSessionStore(usesLiveBackend: true))
+}

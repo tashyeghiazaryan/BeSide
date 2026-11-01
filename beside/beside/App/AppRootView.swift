@@ -1,5 +1,12 @@
 import SwiftUI
 
+/// App shell: **session layer** first, then tabs with **couple layer**.
+///
+/// 1. `AppSessionPhase` — loading → needsAuth (`AuthGateView`) → authenticated / demo
+/// 2. Inside tabs — `MeSessionStore.coupleSurfaceState` —
+///    unpaired (`PairingRequiredGate`) → pairedWaiting → pairedActive
+///
+/// Auth and pairing are separate; do not put `CoupleSurfaceState` on the auth screen.
 struct AppRootView: View {
     @State private var session = AppSessionStore.makeDefault()
     @State private var meStore = MeSessionStore()
@@ -33,11 +40,32 @@ struct AppRootView: View {
 
     @MainActor
     private func syncStoreWithSession() async {
-        guard let context = session.coupleContext else { return }
+        switch session.phase {
+        case .loading:
+            return
+        case .needsAuth:
+            // Back on Auth — drop in-memory couple/shared state from the previous session.
+            meStore.resetAfterSignOut()
+            return
+        case .demo:
+            if let context = session.coupleContext {
+                meStore.applyCoupleContext(context)
+            }
+            meStore.detachLiveBackend()
+            return
+        case .authenticated:
+            break
+        }
+
+        guard let context = session.coupleContext else {
+            // Authenticated but context not loaded yet — keep store, wait for refresh.
+            meStore.detachLiveBackend()
+            return
+        }
+
         meStore.applyCoupleContext(context)
 
-        guard session.phase == .authenticated,
-              AppBackend.shared.isLiveConfigured,
+        guard AppBackend.shared.isLiveConfigured,
               let client = SupabaseClientProvider.client(config: AppBackend.shared.supabaseConfig),
               context.hasCouple
         else {
@@ -55,4 +83,12 @@ struct AppRootView: View {
             await meStore.attachLiveBackend(gateway)
         }
     }
+}
+
+#Preview("App · Auth") {
+    AuthGateView(session: AppSessionStore(usesLiveBackend: true))
+}
+
+#Preview("App · tabs demo") {
+    RootTabView(meStore: .previewPairedActive(), session: AppSessionStore())
 }

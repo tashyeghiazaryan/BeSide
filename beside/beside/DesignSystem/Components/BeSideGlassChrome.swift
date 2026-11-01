@@ -133,14 +133,13 @@ enum BeSideGlassChrome {
                 endPoint: .trailing
             )
         case .widgetFrosted:
-            // Make: navy → rose → white → lilac
+            // Soft specular only — no navy band on Us tiles.
             return LinearGradient(
                 colors: [
                     Color.clear,
-                    Color(hex: 0x1A1A2E).opacity(0.35),
-                    Color(hex: 0xE8BEC9).opacity(0.7),
+                    Color(hex: 0xE8BEC9).opacity(0.45),
                     Color.white.opacity(0.95),
-                    Color(hex: 0xC4B5FD).opacity(0.55),
+                    Color(hex: 0xC4B5FD).opacity(0.4),
                     Color.clear,
                 ],
                 startPoint: .leading,

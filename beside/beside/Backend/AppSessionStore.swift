@@ -1,10 +1,16 @@
 import Foundation
 import Observation
 
+/// Layer 1 — account session (above couple UI).
+/// After `.authenticated` / `.demo`, tabs use `MeSessionStore.coupleSurfaceState`
+/// (unpaired → pairedWaiting → pairedActive). Do not fold pairing into this enum.
 enum AppSessionPhase: Equatable {
     case loading
+    /// Full-screen [`AuthGateView`] — email OTP (and optional password).
     case needsAuth
+    /// Signed in; couple state lives on `MeSessionStore`.
     case authenticated
+    /// No Supabase secrets — local demo with seeded couple data.
     case demo
 }
 
