@@ -14,16 +14,14 @@ enum InstagramStoriesShare {
     static func shareCoupleStory(
         meName: String,
         partnerName: String,
-        meJPEG: Data?,
-        partnerJPEG: Data?,
-        subtitle: String
+        style: UsTimeTogether.Style,
+        relationshipStart: Date
     ) {
         let card = CoupleStoryShareCard(
             meName: meName,
             partnerName: partnerName,
-            mePhoto: meJPEG.flatMap(UIImage.init(data:)),
-            partnerPhoto: partnerJPEG.flatMap(UIImage.init(data:)),
-            subtitle: subtitle
+            style: style,
+            relationshipStart: relationshipStart
         )
         let renderer = ImageRenderer(content: card)
         renderer.scale = 3

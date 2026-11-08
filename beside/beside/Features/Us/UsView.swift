@@ -8,7 +8,6 @@ struct UsView: View {
     var session: AppSessionStore? = nil
     /// Switch root tabs (e.g. mood-reaction notification → Me).
     var onSelectTab: ((AppTab) -> Void)? = nil
-    @State private var dailyTipID: DailyTaskID?
     @State private var showImportantDatesList = false
     @State private var showDatesDetail = false
     @State private var showLittleThingsAdd = false
@@ -36,64 +35,38 @@ struct UsView: View {
     @State private var showSharedMomentLibrary = false
     @State private var sharedMomentPickerItem: PhotosPickerItem?
     @State private var cameraCaptureJPEG: Data?
-
-    private enum DailyTaskID: String, CaseIterable, Identifiable {
-        case mood
-        case reaction
-        case activity
-
-        var id: String { rawValue }
-
-        var short: String {
-            switch self {
-            case .mood: return "mood"
-            case .reaction: return "partner"
-            case .activity: return "prompt"
-            }
-        }
-
-        var label: String {
-            switch self {
-            case .mood: return "Share your mood & wish"
-            case .reaction: return "Check partner's mood"
-            case .activity: return "Complete a couples prompt"
-            }
-        }
-
-        var why: String {
-            switch self {
-            case .mood:
-                return "Lets your partner see how you feel today and what would help — so they can show up for you."
-            case .reaction:
-                return "A quick look at their day builds care: react, acknowledge, and stay close even when you're apart."
-            case .activity:
-                return "A shared question or task turns the day into a moment together — small rituals that deepen connection."
-            }
-        }
-    }
+    @State private var showCoupleStorySourceSheet = false
+    @State private var showCoupleStoryCamera = false
+    @State private var showCoupleStoryLibrary = false
+    @State private var coupleStoryPickerItem: PhotosPickerItem?
+    @State private var coupleStoryCaptureJPEG: Data?
+    @State private var viewingCoupleStoryID: String?
+    /// Viewer from strip uses live (24h) list; from archive uses full history.
+    @State private var viewingCoupleStoryFromArchive = false
+    @State private var showCoupleStoriesArchive = false
+    @State private var layout = BeSideMetrics.UsLayout.standard
 
     private var ink: Color { Color(hex: 0x26282B) }
 
-    private var anyTipOpen: Bool { dailyTipID != nil }
-
-    private func dismissTips() {
-        guard anyTipOpen else { return }
-        withAnimation(.easeOut(duration: 0.18)) {
-            dailyTipID = nil
-        }
+    /// Home chrome (bell) — hidden under full-screen Us overlays.
+    private var showsUsHomeChrome: Bool {
+        !showNotifications && !showScreenPhotoPage && !showDatesDetail
+            && !showImportantDatesList && !showImportantDatesAdd && !showCoupleSharePage
+            && !showCoupleStoriesArchive && viewingCoupleStoryID == nil
+            && !showWishlist && !showLoveNotesPage && !showSharedMemoriesPage
     }
 
-    private var tipDismissOverlay: some View {
-        Color.clear
-            .contentShape(Rectangle())
-            .onTapGesture(perform: dismissTips)
+    /// Thin daily strip above the tab bar — only while something is still open for today.
+    private var showsDailyTogetherNudge: Bool {
+        showsUsHomeChrome
+            && store.coupleSurfaceState != .unpaired
+            && dailyTogetherNudgeModel.destination != nil
     }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
             BeSideBackground.widgetCanvas
                 .ignoresSafeArea()
-                .onTapGesture(perform: dismissTips)
 
             BeSideBackground.widgetAmbientBlobs()
                 .ignoresSafeArea()
@@ -104,31 +77,37 @@ struct UsView: View {
                     Color.clear.frame(height: 8)
 
                     heroSection
-                        .padding(.bottom, 16)
-                        .zIndex(anyTipOpen ? 50 : 0)
+                        .padding(.bottom, layout.heroBottomGap)
 
                     homeEntrySections
-                        .padding(.horizontal, -10)
-                        .padding(.bottom, 20)
-                        .zIndex(0)
-                        .overlay { if anyTipOpen { tipDismissOverlay } }
+                        .padding(.bottom, layout.sectionBottomGap)
 
                     usDailyWarmthFooter
-                        .padding(.bottom, 20)
-                        .overlay { if anyTipOpen { tipDismissOverlay } }
+                        .padding(.bottom, layout.sectionBottomGap)
 
-                    Color.clear.frame(height: BeSideMetrics.tabBarClearance)
-                        .overlay { if anyTipOpen { tipDismissOverlay } }
+                    // Clear floating tab + daily strip (overlay, not safeAreaInset).
+                    Color.clear.frame(
+                        height: layout.tabBarClearance
+                            + (showsDailyTogetherNudge ? layout.nudgeHeight + 10 : 0)
+                    )
                 }
-                .padding(.horizontal, BeSideMetrics.pageInset)
+                .padding(.horizontal, layout.pageInset)
             }
             .scrollClipDisabled()
 
-            if !showNotifications && !showScreenPhotoPage && !showDatesDetail
-                && !showImportantDatesList && !showImportantDatesAdd && !showCoupleSharePage {
-                notificationsBell
-                    .padding(.leading, 14)
-                    .padding(.top, 4)
+            if showsDailyTogetherNudge {
+                VStack(spacing: 0) {
+                    Color.clear
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .allowsHitTesting(false)
+                    dailyTogetherNudge
+                        .padding(.horizontal, layout.pageInset)
+                        // Sit snug above the floating tab chrome.
+                        .padding(.bottom, layout.tabBarClearance - 14)
+                }
+                .zIndex(40)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.easeOut(duration: 0.22), value: showsDailyTogetherNudge)
             }
 
             if showNotifications {
@@ -293,6 +272,50 @@ struct UsView: View {
                 .zIndex(92)
             }
 
+            if showCoupleStoriesArchive {
+                CoupleStoriesArchivePage(
+                    stories: store.coupleStoriesNewestFirst,
+                    meLabel: "You",
+                    partnerLabel: store.partnerDisplayName,
+                    onClose: {
+                        withAnimation(.easeOut(duration: 0.28)) {
+                            showCoupleStoriesArchive = false
+                        }
+                    },
+                    onOpenStory: { id in
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            viewingCoupleStoryFromArchive = true
+                            viewingCoupleStoryID = id
+                        }
+                    }
+                )
+                .transition(.asymmetric(
+                    insertion: .move(edge: .trailing).combined(with: .opacity),
+                    removal: .move(edge: .trailing).combined(with: .opacity)
+                ))
+                .zIndex(93)
+            }
+
+            if let storyID = viewingCoupleStoryID {
+                CoupleStoryViewer(
+                    stories: viewingCoupleStoryFromArchive
+                        ? store.coupleStoriesNewestFirst
+                        : store.coupleStoriesLiveNewestFirst,
+                    startID: storyID,
+                    meLabel: "You",
+                    partnerLabel: store.partnerDisplayName,
+                    onSeen: { id in store.markCoupleStorySeen(id: id) },
+                    onClose: {
+                        withAnimation(.easeOut(duration: 0.2)) {
+                            viewingCoupleStoryID = nil
+                            viewingCoupleStoryFromArchive = false
+                        }
+                    }
+                )
+                .transition(.opacity)
+                .zIndex(97)
+            }
+
             if showLoveNoteCompose {
                 LoveNoteComposeModal(
                     onClose: {
@@ -420,12 +443,22 @@ struct UsView: View {
         .animation(.spring(response: 0.38, dampingFraction: 0.86), value: showCoupleSharePage)
         .animation(.spring(response: 0.38, dampingFraction: 0.86), value: showScreenPhotoPage)
         .animation(.spring(response: 0.38, dampingFraction: 0.86), value: showSharedMemoriesPage)
+        .animation(.spring(response: 0.38, dampingFraction: 0.86), value: showCoupleStoriesArchive)
         .animation(.spring(response: 0.38, dampingFraction: 0.86), value: showNotifications)
         .animation(.easeOut(duration: 0.2), value: loveNoteReading != nil)
         .animation(.easeOut(duration: 0.2), value: viewingMemoryID != nil)
         .animation(.easeOut(duration: 0.2), value: showSharedMemoryAdd)
         .onAppear {
             store.refreshNotificationSources()
+        }
+        .onGeometryChange(for: BeSideMetrics.UsLayout.self) { proxy in
+            BeSideMetrics.UsLayout.resolve(
+                width: proxy.size.width,
+                height: max(proxy.size.height, UIScreen.main.bounds.height),
+                safeBottom: proxy.safeAreaInsets.bottom
+            )
+        } action: { newLayout in
+            layout = newLayout
         }
         .ignoresSafeArea(.keyboard)
         .accessibilityElement(children: .contain)
@@ -479,11 +512,56 @@ struct UsView: View {
             cameraCaptureJPEG = nil
             showSharedMomentCamera = false
         }
+        .confirmationDialog(
+            "Add a story",
+            isPresented: $showCoupleStorySourceSheet,
+            titleVisibility: .visible
+        ) {
+            if CameraImagePicker.isCameraAvailable {
+                Button("Record / Take Photo") {
+                    coupleStoryCaptureJPEG = nil
+                    showCoupleStoryCamera = true
+                }
+            }
+            Button("Choose from Library") {
+                showCoupleStoryLibrary = true
+            }
+            Button("Cancel", role: .cancel) {}
+        }
+        .photosPicker(
+            isPresented: $showCoupleStoryLibrary,
+            selection: $coupleStoryPickerItem,
+            matching: .images,
+            photoLibrary: .shared()
+        )
+        .onChange(of: coupleStoryPickerItem) { _, item in
+            guard let item else { return }
+            Task {
+                if let photo = try? await item.loadTransferable(type: SharedMemoryPickedPhoto.self) {
+                    store.addCoupleStory(imageJPEG: photo.data)
+                } else if let data = try? await item.loadTransferable(type: Data.self),
+                          let image = UIImage(data: data),
+                          let jpeg = image.jpegData(compressionQuality: 0.82) {
+                    store.addCoupleStory(imageJPEG: jpeg)
+                }
+                coupleStoryPickerItem = nil
+            }
+        }
+        .fullScreenCover(isPresented: $showCoupleStoryCamera) {
+            CameraImagePicker(imageData: $coupleStoryCaptureJPEG)
+                .ignoresSafeArea()
+        }
+        .onChange(of: coupleStoryCaptureJPEG) { _, data in
+            guard let data else { return }
+            store.addCoupleStory(imageJPEG: data)
+            coupleStoryCaptureJPEG = nil
+            showCoupleStoryCamera = false
+        }
+        .animation(.easeOut(duration: 0.2), value: viewingCoupleStoryID != nil)
     }
 
     private func openNotification(_ notification: UsNotification) {
         showNotifications = false
-        dismissTips()
 
         switch notification.kind {
         case .moodReaction:
@@ -509,7 +587,6 @@ struct UsView: View {
     }
 
     private func openWishlist(tab: WishlistPage.Tab) {
-        dismissTips()
         wishlistInitialTab = tab
         showImportantDatesAdd = false
         showImportantDatesList = false
@@ -518,7 +595,6 @@ struct UsView: View {
     }
 
     private func openDatesDetail() {
-        dismissTips()
         showImportantDatesAdd = false
         showImportantDatesList = false
         withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
@@ -527,7 +603,6 @@ struct UsView: View {
     }
 
     private func openDatesList() {
-        dismissTips()
         showImportantDatesAdd = false
         showDatesDetail = false
         withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
@@ -536,14 +611,12 @@ struct UsView: View {
     }
 
     private func openDatesAdd() {
-        dismissTips()
         withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
             showImportantDatesAdd = true
         }
     }
 
     private func openLittleThingsAdd(day: Date = Date()) {
-        dismissTips()
         littleThingsAddDay = Calendar.current.startOfDay(for: day)
         withAnimation(.easeOut(duration: 0.2)) {
             showLittleThingsAdd = true
@@ -552,7 +625,6 @@ struct UsView: View {
 
     private var notificationsBell: some View {
         Button {
-            dismissTips()
             store.refreshNotificationSources()
             withAnimation(.spring(response: 0.38, dampingFraction: 0.86)) {
                 showNotifications = true
@@ -560,26 +632,22 @@ struct UsView: View {
         } label: {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: "bell")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(ink.opacity(0.56))
-                    .frame(width: 40, height: 40)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(ink.opacity(0.55))
+                    .frame(width: 28, height: 28)
                     .background {
                         Circle()
-                            .fill(Color.white.opacity(0.44))
-                            .overlay {
-                                Circle().stroke(ink.opacity(0.15), lineWidth: 1.5)
-                            }
-                            .shadow(color: ink.opacity(0.06), radius: 8, y: 2)
+                            .fill(Color.white.opacity(0.5))
                     }
 
                 if store.unreadNotificationsCount > 0 {
                     Circle()
                         .fill(BeSideColor.raspberry)
-                        .frame(width: 8, height: 8)
+                        .frame(width: 7, height: 7)
                         .overlay {
                             Circle().stroke(Color.white.opacity(0.9), lineWidth: 1)
                         }
-                        .offset(x: -2, y: 2)
+                        .offset(x: 1, y: 1)
                 }
             }
         }
@@ -614,81 +682,117 @@ struct UsView: View {
                     )
                     .allowsHitTesting(false)
 
-                // Tiny line hearts — quiet doodle.
-                VStack {
-                    HStack(spacing: 6) {
-                        Image(systemName: "heart")
-                            .font(.system(size: 11, weight: .ultraLight))
-                        Image(systemName: "heart")
-                            .font(.system(size: 8, weight: .ultraLight))
-                            .offset(y: 3)
-                        Spacer(minLength: 0)
-                    }
-                    .foregroundStyle(roseSoft.opacity(0.55))
-                    .padding(.leading, 14)
-                    .padding(.top, 12)
-                    Spacer(minLength: 0)
-                }
-                .allowsHitTesting(false)
+                VStack(spacing: 4) {
+                    // One top row: bell | names | share — same vertical level.
+                    HStack(alignment: .center, spacing: 4) {
+                        Group {
+                            if showsUsHomeChrome {
+                                notificationsBell
+                            } else {
+                                Color.clear.frame(width: 28, height: 28)
+                            }
+                        }
+                        .frame(width: 28, height: 28)
 
-                VStack(spacing: 8) {
+                        Button {
+                            guard surface != .unpaired else { return }
+                            showManagePair = true
+                        } label: {
+                            Group {
+                                if surface == .unpaired {
+                                    Text(store.coupleHeroTitle)
+                                        .font(.system(size: layout.heroTitleSize, weight: .thin))
+                                        .tracking(0.4)
+                                        .foregroundStyle(ink.opacity(0.82))
+                                } else {
+                                    HStack(spacing: 6) {
+                                        Text(store.displayName)
+                                        Text("&")
+                                            .font(.system(size: layout.heroTitleSize - 5, weight: .ultraLight))
+                                            .foregroundStyle(ink.opacity(0.82))
+                                        Text(store.partnerDisplayName)
+                                    }
+                                    .font(.system(size: layout.heroTitleSize, weight: .thin))
+                                    .tracking(0.3)
+                                    .foregroundStyle(ink.opacity(0.82))
+                                }
+                            }
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.75)
+                            .frame(maxWidth: .infinity)
+                            .multilineTextAlignment(.center)
+                            .contentShape(Rectangle())
+                            .accessibilityLabel(store.coupleHeroTitle)
+                            .accessibilityIdentifier("us.couple.names")
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(surface == .unpaired)
+                        .accessibilityHint(surface == .unpaired ? "" : "Opens pair settings")
+
+                        Group {
+                            if surface != .unpaired {
+                                Button {
+                                    withAnimation(.easeOut(duration: 0.28)) {
+                                        showCoupleSharePage = true
+                                    }
+                                } label: {
+                                    Image(systemName: "square.and.arrow.up")
+                                        .font(.system(size: 11, weight: .medium))
+                                        .foregroundStyle(rose.opacity(0.75))
+                                        .frame(width: 28, height: 28)
+                                        .background {
+                                            Circle()
+                                                .fill(Color.white.opacity(0.45))
+                                        }
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel("Share couple card")
+                                .accessibilityIdentifier("us.hero.share.instagram")
+                            } else {
+                                Color.clear.frame(width: 28, height: 28)
+                            }
+                        }
+                        .frame(width: 28, height: 28)
+                    }
+
                     Button {
                         guard surface != .unpaired else { return }
                         showManagePair = true
                     } label: {
-                        VStack(spacing: 0) {
-                            ZStack {
-                                Circle()
-                                    .fill(
-                                        RadialGradient(
-                                            colors: [
-                                                roseSoft.opacity(0.28),
-                                                Color.clear,
-                                            ],
-                                            center: .center,
-                                            startRadius: 6,
-                                            endRadius: 60
-                                        )
+                        ZStack {
+                            Circle()
+                                .fill(
+                                    RadialGradient(
+                                        colors: [
+                                            roseSoft.opacity(0.28),
+                                            Color.clear,
+                                        ],
+                                        center: .center,
+                                        startRadius: 6,
+                                        endRadius: layout.avatarSize * 0.78
                                     )
-                                    .frame(width: 118, height: 118)
+                                )
+                                .frame(
+                                    width: layout.avatarSize * 1.45,
+                                    height: layout.avatarSize * 1.45
+                                )
 
-                                HStack(spacing: -18) {
-                                    avatarBubble(name: store.displayName, jpeg: store.meAvatarJPEG)
-                                    if surface != .unpaired {
-                                        avatarBubble(
-                                            name: store.partnerDisplayName,
-                                            jpeg: store.partnerAvatarJPEG,
-                                            isPlaceholder: surface == .pairedWaiting
-                                                && store.partnerAvatarJPEG == nil
-                                        )
-                                    }
+                            HStack(spacing: -layout.avatarSize * 0.28) {
+                                avatarBubble(name: store.displayName, jpeg: store.meAvatarJPEG)
+                                if surface != .unpaired {
+                                    avatarBubble(
+                                        name: store.partnerDisplayName,
+                                        jpeg: store.partnerAvatarJPEG,
+                                        isPlaceholder: surface == .pairedWaiting
+                                            && store.partnerAvatarJPEG == nil
+                                    )
                                 }
-                            }
-                            .padding(.bottom, 6)
-                            .accessibilityIdentifier("us.avatars")
-
-                            if surface == .unpaired {
-                                Text(store.coupleHeroTitle)
-                                    .font(.system(size: 24, weight: .thin))
-                                    .tracking(0.4)
-                                    .foregroundStyle(ink.opacity(0.82))
-                            } else {
-                                HStack(spacing: 6) {
-                                    Text(store.displayName)
-                                    Text("&")
-                                        .font(.system(size: 18, weight: .ultraLight))
-                                        .foregroundStyle(ink.opacity(0.82))
-                                    Text(store.partnerDisplayName)
-                                }
-                                .font(.system(size: 24, weight: .thin))
-                                .tracking(0.3)
-                                .foregroundStyle(ink.opacity(0.82))
                             }
                         }
+                        .offset(y: -2)
                         .frame(maxWidth: .infinity)
                         .contentShape(Rectangle())
-                        .accessibilityLabel(store.coupleHeroTitle)
-                        .accessibilityIdentifier("us.couple.names")
+                        .accessibilityIdentifier("us.avatars")
                     }
                     .buttonStyle(.plain)
                     .disabled(surface == .unpaired)
@@ -703,7 +807,7 @@ struct UsView: View {
                             } label: {
                                 HStack(spacing: 5) {
                                     Text(store.coupleHeroSubtitle)
-                                        .font(.system(size: 16, weight: .light))
+                                        .font(.system(size: layout.heroSubtitleSize, weight: .light))
                                         .tracking(0.2)
                                         .multilineTextAlignment(.center)
                                         .contentTransition(.opacity)
@@ -717,7 +821,7 @@ struct UsView: View {
                             .accessibilityHint("Changes how time together is shown")
                         } else {
                             Text(store.coupleHeroSubtitle)
-                                .font(.system(size: 16, weight: .light))
+                                .font(.system(size: layout.heroSubtitleSize, weight: .light))
                                 .tracking(0.2)
                                 .foregroundStyle(ink.opacity(0.4))
                                 .multilineTextAlignment(.center)
@@ -725,46 +829,39 @@ struct UsView: View {
                     }
                     .accessibilityIdentifier("us.time.together")
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 18)
-                .padding(.bottom, 14)
-
-                if surface != .unpaired {
-                    VStack {
-                        HStack {
-                            Spacer(minLength: 0)
-                            Button {
-                                withAnimation(.easeOut(duration: 0.28)) {
-                                    showCoupleSharePage = true
-                                }
-                            } label: {
-                                Image(systemName: "square.and.arrow.up")
-                                    .font(.system(size: 11, weight: .medium))
-                                    .foregroundStyle(rose.opacity(0.75))
-                                    .frame(width: 28, height: 28)
-                                    .background {
-                                        Circle()
-                                            .fill(Color.white.opacity(0.45))
-                                    }
-                            }
-                            .buttonStyle(.plain)
-                            .padding(10)
-                            .accessibilityLabel("Share couple card")
-                            .accessibilityIdentifier("us.hero.share.instagram")
-                        }
-                        Spacer(minLength: 0)
-                    }
-                }
+                .padding(.horizontal, 10)
+                .padding(.top, 10)
+                .padding(.bottom, 8)
             }
             .frame(maxWidth: .infinity)
             .beSideGlassChrome(cornerRadius: BeSideMetrics.glassCornerLarge, style: .widgetFrosted)
-            .overlay { if anyTipOpen { tipDismissOverlay } }
 
             if surface != .unpaired {
-                dailyProgress
-                    .padding(.top, 36)
-                    .padding(.bottom, 14)
-                    .zIndex(dailyTipID == nil ? 0 : 40)
+                // Re-evaluate 24h expiry while Us is visible.
+                TimelineView(.periodic(from: .now, by: 60)) { context in
+                    let live = store.coupleStoriesLive(at: context.date)
+                    let hasHistory = !store.coupleStoriesNewestFirst.isEmpty
+                    VStack(alignment: .trailing, spacing: 4) {
+                        if hasHistory {
+                            Button {
+                                withAnimation(.easeOut(duration: 0.28)) {
+                                    showCoupleStoriesArchive = true
+                                }
+                            } label: {
+                                Text("See all")
+                                    .font(.system(size: 11, weight: .medium))
+                                    .foregroundStyle(ink.opacity(0.4))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel("See all stories")
+                            .accessibilityIdentifier("us.stories.seeAll")
+                        }
+
+                        coupleStoriesStrip(liveStories: live)
+                    }
+                    .padding(.top, layout.storiesTopGap)
+                    .padding(.bottom, 4)
+                }
             } else {
                 Text("Pair to unlock daily progress, dates, and little things together.")
                     .font(.system(size: 14, weight: .light))
@@ -778,6 +875,117 @@ struct UsView: View {
         .frame(maxWidth: .infinity)
         .padding(.top, 0)
         .accessibilityIdentifier("us.hero")
+    }
+
+    /// Shared Instagram-style story rings — Add first, then each live (24h) story.
+    private func coupleStoriesStrip(liveStories: [UsCoupleStory]) -> some View {
+        // Break out of page inset so rings aren't hard-clipped mid-circle;
+        // matching content padding keeps the first/last rings aligned with the hero card.
+        let edge = layout.pageInset
+        let ring = layout.storyRingSize
+        let thumb = ring - 8
+
+        return ScrollView(.horizontal, showsIndicators: false) {
+            HStack(alignment: .top, spacing: 7) {
+                Button {
+                    showCoupleStorySourceSheet = true
+                } label: {
+                    VStack(spacing: 4) {
+                        ZStack {
+                            Circle()
+                                .strokeBorder(
+                                    style: StrokeStyle(lineWidth: 1.5, dash: [4, 3])
+                                )
+                                .foregroundStyle(ink.opacity(0.22))
+                                .frame(width: ring, height: ring)
+                            Circle()
+                                .fill(Color.white.opacity(0.55))
+                                .frame(width: thumb, height: thumb)
+                            Image(systemName: "plus")
+                                .font(.system(size: max(14, ring * 0.28), weight: .semibold))
+                                .foregroundStyle(ink.opacity(0.55))
+                        }
+                        Text("Add")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundStyle(ink.opacity(0.45))
+                            .lineLimit(1)
+                    }
+                    .frame(width: ring)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Add a story")
+                .accessibilityIdentifier("us.stories.add")
+
+                ForEach(liveStories) { story in
+                    Button {
+                        viewingCoupleStoryFromArchive = false
+                        viewingCoupleStoryID = story.id
+                    } label: {
+                        VStack(spacing: 4) {
+                            ZStack {
+                                Circle()
+                                    .stroke(
+                                        AngularGradient(
+                                            colors: story.seenByMe
+                                                ? [ink.opacity(0.18), ink.opacity(0.18)]
+                                                : [
+                                                    Color(hex: 0xF9A8D4),
+                                                    Color(hex: 0xC4B5FD),
+                                                    Color(hex: 0xF9A8D4),
+                                                ],
+                                            center: .center
+                                        ),
+                                        lineWidth: 2
+                                    )
+                                    .frame(width: ring, height: ring)
+
+                                storyThumb(story)
+                                    .frame(width: thumb, height: thumb)
+                                    .clipShape(Circle())
+                                    .overlay {
+                                        Circle().stroke(Color.white.opacity(0.9), lineWidth: 1.5)
+                                    }
+                            }
+                            Text(story.author == .me ? "You" : store.partnerDisplayName)
+                                .font(.system(size: 10, weight: .medium))
+                                .foregroundStyle(ink.opacity(0.5))
+                                .lineLimit(1)
+                                .minimumScaleFactor(0.8)
+                        }
+                        .frame(width: ring)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(
+                        "Story from \(story.author == .me ? "you" : store.partnerDisplayName)"
+                    )
+                    .accessibilityIdentifier("us.stories.item.\(story.id)")
+                }
+            }
+            .padding(.horizontal, edge)
+            .padding(.vertical, 2)
+        }
+        .padding(.horizontal, -edge)
+        .scrollClipDisabled()
+        .accessibilityIdentifier("us.stories.strip")
+    }
+
+    private func storyThumb(_ story: UsCoupleStory) -> some View {
+        Group {
+            if let image = UIImage(data: story.imageJPEG) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Circle()
+                    .fill(
+                        LinearGradient(
+                            colors: [Color(hex: 0xF3D6DE), Color(hex: 0xE8BEC9)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+            }
+        }
     }
 
     private func avatarBubble(name: String, jpeg: Data?, isPlaceholder: Bool = false) -> some View {
@@ -794,15 +1002,15 @@ struct UsView: View {
                     .scaledToFill()
             } else if isPlaceholder {
                 Image(systemName: "person.fill")
-                    .font(.system(size: 22, weight: .light))
+                    .font(.system(size: layout.avatarSize * 0.34, weight: .light))
                     .foregroundStyle(ink.opacity(0.35))
             } else {
                 Text(initial)
-                    .font(.system(size: 22, weight: .light))
+                    .font(.system(size: layout.avatarSize * 0.34, weight: .light))
                     .foregroundStyle(ink.opacity(0.72))
             }
         }
-        .frame(width: 66, height: 66)
+        .frame(width: layout.avatarSize, height: layout.avatarSize)
         .opacity(isPlaceholder ? 0.72 : 1)
         .background {
             Circle()
@@ -830,118 +1038,109 @@ struct UsView: View {
         .accessibilityLabel(name)
     }
 
-    private var dailyProgress: some View {
-        let tasks: [(DailyTaskID, Bool, Bool)] = [
-            (.mood, store.meMoodSharedToday, store.partnerMoodSharedToday),
-            (.reaction, store.meCheckedPartnerMoodToday, store.partnerCheckedMyMoodToday),
-            (.activity, store.meActivityDoneToday, store.partnerActivityDoneToday),
+    private struct DailyTogetherNudgeModel {
+        let destination: AppTab?
+        let title: String
+        let doneCount: Int
+        let total: Int
+    }
+
+    private var dailyTogetherNudgeModel: DailyTogetherNudgeModel {
+        let partner = store.partnerDisplayName
+        let bothDone: [Bool] = [
+            store.meMoodSharedToday && store.partnerMoodSharedToday,
+            store.meCheckedPartnerMoodToday && store.partnerCheckedMyMoodToday,
+            store.meActivityDoneToday && store.partnerActivityDoneToday,
         ]
-        let doneCount = tasks.filter { $0.1 && $0.2 }.count
+        let doneCount = bothDone.filter { $0 }.count
+        let total = bothDone.count
 
-        // Layout height = chips only; tip overlays level bar / tiles (does not push page down).
-        return HStack(spacing: 6) {
-            ForEach(Array(tasks.enumerated()), id: \.element.0.id) { index, item in
-                let (id, meDone, partnerDone) = item
-                let bothDone = meDone && partnerDone
-                if index > 0 {
-                    Text("·")
-                        .font(.system(size: 12, weight: .light))
-                        .foregroundStyle(ink.opacity(0.22))
-                }
-                Button {
-                    withAnimation(.easeOut(duration: 0.2)) {
-                        dailyTipID = dailyTipID == id ? nil : id
-                    }
-                } label: {
-                    HStack(spacing: 5) {
-                        ZStack {
-                            Circle()
-                                .fill(
-                                    bothDone
-                                        ? LinearGradient(
-                                            colors: [
-                                                Color(hex: 0x6EE7B7).opacity(0.28),
-                                                Color(hex: 0x34D399).opacity(0.18),
-                                            ],
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                        : LinearGradient(
-                                            colors: [Color.white.opacity(0.55), Color.white.opacity(0.55)],
-                                            startPoint: .top,
-                                            endPoint: .bottom
-                                        )
-                                )
-                                .overlay {
-                                    Circle().stroke(
-                                        bothDone
-                                            ? Color(hex: 0x34D399).opacity(0.28)
-                                            : ink.opacity(0.12),
-                                        lineWidth: 1
-                                    )
-                                }
-                            if bothDone {
-                                Image(systemName: "checkmark")
-                                    .font(.system(size: 9, weight: .bold))
-                                    .foregroundStyle(Color(hex: 0x34D399).opacity(0.85))
-                            }
-                        }
-                        .frame(width: 18, height: 18)
+        if !store.meMoodSharedToday {
+            return DailyTogetherNudgeModel(
+                destination: .me,
+                title: "Share how you feel today",
+                doneCount: doneCount,
+                total: total
+            )
+        }
+        if !store.meCheckedPartnerMoodToday {
+            return DailyTogetherNudgeModel(
+                destination: .partner,
+                title: "See how \(partner) feels",
+                doneCount: doneCount,
+                total: total
+            )
+        }
+        if !store.meActivityDoneToday {
+            return DailyTogetherNudgeModel(
+                destination: .connection,
+                title: "Do today’s couple task",
+                doneCount: doneCount,
+                total: total
+            )
+        }
+        if doneCount < total {
+            return DailyTogetherNudgeModel(
+                destination: .partner,
+                title: "Waiting for \(partner) to finish",
+                doneCount: doneCount,
+                total: total
+            )
+        }
+        return DailyTogetherNudgeModel(
+            destination: nil,
+            title: "You’re both done for today",
+            doneCount: doneCount,
+            total: total
+        )
+    }
 
-                        Text(id.short)
-                            .font(.system(size: 12, weight: dailyTipID == id ? .medium : .light))
-                            .tracking(0.4)
-                            .foregroundStyle(ink.opacity(0.48))
-                            .textCase(.lowercase)
-                    }
-                    .padding(.vertical, 2)
-                    .padding(.leading, 2)
-                    .padding(.trailing, 6)
-                    .background {
+    /// Thin bright strip above the floating tab bar — next daily action + progress.
+    private var dailyTogetherNudge: some View {
+        let model = dailyTogetherNudgeModel
+        let wash = BeSideColor.navyStart
+
+        return Button {
+            guard let destination = model.destination else { return }
+            onSelectTab?(destination)
+        } label: {
+            HStack(spacing: 8) {
+                Text(model.title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.94))
+                    .lineLimit(1)
+                Text("·")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color.white.opacity(0.45))
+                Text("\(model.doneCount)/\(model.total)")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.white.opacity(0.72))
+                    .monospacedDigit()
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(Color.white.opacity(0.55))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity)
+            .background {
+                Capsule()
+                    .fill(wash)
+                    .overlay {
                         Capsule()
-                            .fill(dailyTipID == id ? Color.white.opacity(0.55) : Color.clear)
-                            .overlay {
-                                Capsule().stroke(
-                                    dailyTipID == id ? ink.opacity(0.14) : Color.clear,
-                                    lineWidth: 1
-                                )
-                            }
+                            .stroke(Color.white.opacity(0.14), lineWidth: 0.8)
                     }
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("\(id.label)\(bothDone ? ", done" : ", not done"). Show explanation.")
-                .accessibilityIdentifier("us.daily.\(id.rawValue)")
+                    .shadow(color: wash.opacity(0.28), radius: 8, y: 2)
             }
         }
-        .frame(maxWidth: .infinity)
-        .accessibilityLabel("Daily progress \(doneCount) of \(tasks.count) complete")
-        .accessibilityIdentifier("us.daily.progress")
-        .background {
-            // Empty space around chips dismisses; chip buttons still receive taps on top.
-            if anyTipOpen { tipDismissOverlay }
-        }
-        .overlay(alignment: .top) {
-            if let tipID = dailyTipID, let tip = tasks.first(where: { $0.0 == tipID }) {
-                tipCard(
-                    eyebrow: "Daily · \(tip.1 && tip.2 ? "Done" : "To do")",
-                    title: tip.0.label,
-                    body: tip.0.why
-                )
-                .padding(.top, 28)
-                .transition(
-                    .asymmetric(
-                        insertion: .opacity.combined(with: .scale(scale: 0.96, anchor: .top)),
-                        removal: .opacity.combined(with: .scale(scale: 0.97, anchor: .top))
-                    )
-                )
-                .accessibilityIdentifier("us.daily.tip")
-            }
-        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(model.title). \(model.doneCount) of \(model.total) complete")
+        .accessibilityIdentifier("us.daily.nudge")
     }
 
     private var screenPhotoCard: some View {
         Button {
-            dismissTips()
             showScreenPhotoPage = true
         } label: {
             HStack(alignment: .center, spacing: 12) {
@@ -1008,17 +1207,19 @@ struct UsView: View {
         )
         let captured = store.sharedMomentPhotoJPEG.flatMap { UIImage(data: $0) }
 
+        let scale = layout.momentsThumbScale
+
         return ZStack(alignment: .bottomLeading) {
             // Back shared photo — slightly tilted
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(photoWash.opacity(0.85))
-                .frame(width: 46, height: 54)
+                .frame(width: 46 * scale, height: 54 * scale)
                 .overlay {
                     RoundedRectangle(cornerRadius: 10, style: .continuous)
                         .stroke(Color.white.opacity(0.7), lineWidth: 1)
                 }
                 .rotationEffect(.degrees(-8))
-                .offset(x: 2, y: -6)
+                .offset(x: 2 * scale, y: -6 * scale)
                 .shadow(color: BeSideColor.navyStart.opacity(0.08), radius: 3, y: 1)
 
             // Front: home-screen widget frame with photo
@@ -1026,14 +1227,14 @@ struct UsView: View {
                 HStack(spacing: 3) {
                     Capsule()
                         .fill(Color.white.opacity(0.55))
-                        .frame(width: 10, height: 2.5)
+                        .frame(width: 10 * scale, height: 2.5)
                     Spacer(minLength: 0)
                     Circle()
                         .fill(Color.white.opacity(0.5))
-                        .frame(width: 4, height: 4)
+                        .frame(width: 4 * scale, height: 4 * scale)
                 }
-                .padding(.horizontal, 7)
-                .padding(.top, 6)
+                .padding(.horizontal, 7 * scale)
+                .padding(.top, 6 * scale)
 
                 Group {
                     if let captured {
@@ -1045,18 +1246,18 @@ struct UsView: View {
                             .fill(photoWash)
                             .overlay {
                                 Image(systemName: "heart.fill")
-                                    .font(.system(size: 12, weight: .semibold))
+                                    .font(.system(size: 12 * scale, weight: .semibold))
                                     .foregroundStyle(Color.white.opacity(0.85))
                             }
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .padding(.horizontal, 6)
-                .padding(.top, 5)
-                .padding(.bottom, 7)
+                .padding(.horizontal, 6 * scale)
+                .padding(.top, 5 * scale)
+                .padding(.bottom, 7 * scale)
             }
-            .frame(width: 58, height: 68)
+            .frame(width: 58 * scale, height: 68 * scale)
             .background {
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                     .fill(Color.white.opacity(0.72))
@@ -1066,45 +1267,10 @@ struct UsView: View {
                     }
                     .shadow(color: BeSideColor.navyStart.opacity(0.12), radius: 6, y: 3)
             }
-            .offset(x: 14, y: 0)
+            .offset(x: 14 * scale, y: 0)
         }
-        .frame(width: 72, height: 74, alignment: .bottomLeading)
+        .frame(width: 72 * scale, height: 74 * scale, alignment: .bottomLeading)
         .accessibilityHidden(true)
-    }
-
-    private func tipCard(eyebrow: String? = nil, title: String, body: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            if let eyebrow {
-                Text(eyebrow)
-                    .font(.system(size: 12, weight: .regular))
-                    .tracking(1.4)
-                    .textCase(.uppercase)
-                    .foregroundStyle(ink.opacity(0.4))
-            }
-            Text(title)
-                .font(.system(size: 16, weight: .medium))
-                .foregroundStyle(ink.opacity(0.82))
-            Text(body)
-                .font(.system(size: 14, weight: .light))
-                .foregroundStyle(ink.opacity(0.58))
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
-        .frame(maxWidth: 280, alignment: .leading)
-        .background {
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .fill(Color.white.opacity(0.72))
-                }
-                .overlay {
-                    RoundedRectangle(cornerRadius: 16, style: .continuous)
-                        .stroke(Color.white.opacity(0.65), lineWidth: 0.8)
-                }
-                .shadow(color: Color.black.opacity(0.12), radius: 16, y: 6)
-        }
     }
 
     /// Soft daily line under the tile grid — affirmation / wish for the couple.
@@ -1112,7 +1278,7 @@ struct UsView: View {
         let line = Self.dailyWarmthLine(for: Date(), surface: store.coupleSurfaceState)
 
         return Text("“\(line)”")
-            .font(.system(size: 15, weight: .light))
+            .font(.system(size: layout.warmthSize, weight: .light))
             .foregroundStyle(ink.opacity(0.55))
             .multilineTextAlignment(.center)
             .fixedSize(horizontal: false, vertical: true)
@@ -1163,11 +1329,11 @@ struct UsView: View {
     /// 2×2 square tiles: Dates | Little Things / Love Notes | Screen.
     private var homeEntrySections: some View {
         let columns = [
-            GridItem(.flexible(), spacing: 12),
-            GridItem(.flexible(), spacing: 12),
+            GridItem(.flexible(), spacing: layout.gridSpacing),
+            GridItem(.flexible(), spacing: layout.gridSpacing),
         ]
 
-        return LazyVGrid(columns: columns, spacing: 12) {
+        return LazyVGrid(columns: columns, spacing: layout.gridSpacing) {
             usDatesTile
             usAsksTile
             usLoveNotesTile
@@ -1211,12 +1377,12 @@ struct UsView: View {
                                             index == safeIndex ? 0.55 : 0.18
                                         )
                                     )
-                                    .frame(width: 5, height: 5)
+                                    .frame(width: 4, height: 4)
                             }
                             Spacer(minLength: 0)
                         }
-                        .padding(.leading, 12)
-                        .padding(.bottom, 12)
+                        .padding(.leading, layout.tilePad)
+                        .padding(.bottom, layout.tilePad)
                     }
                     .accessibilityHidden(true)
                 }
@@ -1226,11 +1392,11 @@ struct UsView: View {
                     HStack(spacing: 8) {
                         Spacer(minLength: 0)
                         // Layout spacers for gift / + overlays.
-                        Color.clear.frame(width: 34, height: 34)
-                        Color.clear.frame(width: 34, height: 34)
+                        Color.clear.frame(width: layout.tileActionSize, height: layout.tileActionSize)
+                        Color.clear.frame(width: layout.tileActionSize, height: layout.tileActionSize)
                     }
                 }
-                .padding(10)
+                .padding(layout.tilePad)
             }
             .contentShape(Rectangle())
         }
@@ -1251,14 +1417,14 @@ struct UsView: View {
                 }
         )
         .overlay(alignment: .bottomTrailing) {
-            HStack(spacing: 8) {
+            HStack(spacing: 7) {
                 Button {
                     openWishlist(tab: .mine)
                 } label: {
                     Image(systemName: "gift")
-                        .font(.system(size: 14, weight: .semibold))
+                        .font(.system(size: layout.tileActionSize * 0.4, weight: .semibold))
                         .foregroundStyle(BeSideColor.navyStart.opacity(0.5))
-                        .frame(width: 34, height: 34)
+                        .frame(width: layout.tileActionSize, height: layout.tileActionSize)
                         .background {
                             Circle().fill(Color.white.opacity(0.62))
                         }
@@ -1270,18 +1436,18 @@ struct UsView: View {
                     openDatesAdd()
                 } label: {
                     Image(systemName: "plus")
-                        .font(.system(size: 15, weight: .bold))
+                        .font(.system(size: layout.tileActionSize * 0.42, weight: .bold))
                         .foregroundStyle(Color.white.opacity(0.95))
-                        .frame(width: 34, height: 34)
+                        .frame(width: layout.tileActionSize, height: layout.tileActionSize)
                         .background { Circle().fill(BeSideColor.navyFill) }
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("Add a date")
                 .accessibilityIdentifier("us.tile.dates.add")
             }
-            .padding(10)
+            .padding(layout.tilePad)
         }
-        .aspectRatio(0.88, contentMode: .fit)
+        .aspectRatio(layout.tileAspect, contentMode: .fit)
         .beSideGlassChrome(cornerRadius: BeSideMetrics.glassCorner, style: .widgetFrosted)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(
@@ -1314,7 +1480,7 @@ struct UsView: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .top, spacing: 6) {
                 Text("Important\nDates")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: layout.tileLabelSize, weight: .semibold))
                     .tracking(0.6)
                     .textCase(.uppercase)
                     .foregroundStyle(BeSideColor.navyStart.opacity(0.4))
@@ -1328,20 +1494,20 @@ struct UsView: View {
             }
 
             Text(Self.dateDayMonth.string(from: date.date))
-                .font(.system(size: 32, weight: .light))
+                .font(.system(size: layout.tileHeroSize, weight: .light))
                 .foregroundStyle(dateHeroColor(urgency))
                 .lineLimit(1)
                 .minimumScaleFactor(0.8)
-                .padding(.top, 16)
+                .padding(.top, layout.tilePad)
             Text(date.title)
-                .font(.system(size: 15, weight: .medium))
+                .font(.system(size: layout.tileBodySize, weight: .medium))
                 .foregroundStyle(BeSideColor.navyStart.opacity(0.84))
                 .lineLimit(2)
-                .padding(.top, 6)
+                .padding(.top, 3)
 
-            Spacer(minLength: 44)
+            Spacer(minLength: layout.tileBottomReserve)
         }
-        .padding(12)
+        .padding(layout.tilePad)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
@@ -1359,7 +1525,7 @@ struct UsView: View {
 
         return VStack(alignment: .leading, spacing: 0) {
             Text("Important\nDates")
-                .font(.system(size: 11, weight: .semibold))
+                .font(.system(size: layout.tileLabelSize, weight: .semibold))
                 .tracking(0.6)
                 .textCase(.uppercase)
                 .foregroundStyle(BeSideColor.navyStart.opacity(0.4))
@@ -1367,17 +1533,17 @@ struct UsView: View {
                 .fixedSize(horizontal: false, vertical: true)
 
             Text(title)
-                .font(.system(size: 16, weight: .medium))
+                .font(.system(size: layout.tileBodySize + 2, weight: .medium))
                 .foregroundStyle(BeSideColor.navyStart.opacity(0.75))
-                .padding(.top, 8)
+                .padding(.top, 6)
             Text(subtitle)
-                .font(.system(size: 12, weight: .light))
+                .font(.system(size: layout.tileCaptionSize, weight: .light))
                 .foregroundStyle(BeSideColor.navyStart.opacity(0.38))
-                .padding(.top, 4)
+                .padding(.top, 3)
 
-            Spacer(minLength: 44)
+            Spacer(minLength: layout.tileBottomReserve)
         }
-        .padding(12)
+        .padding(layout.tilePad)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .contentShape(Rectangle())
     }
@@ -1408,54 +1574,69 @@ struct UsView: View {
 
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Little Things")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: layout.tileLabelSize, weight: .semibold))
                         .tracking(0.6)
                         .textCase(.uppercase)
                         .foregroundStyle(BeSideColor.navyStart.opacity(0.4))
                         .lineLimit(1)
                         .minimumScaleFactor(0.85)
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
                     HStack(alignment: .firstTextBaseline, spacing: 6) {
                         Text("\(count)")
-                            .font(.system(size: 38, weight: .light, design: .rounded))
+                            .font(.system(size: layout.tileHeroSize + 6, weight: .light, design: .rounded))
                             .foregroundStyle(BeSideColor.navyStart.opacity(0.88))
                             .monospacedDigit()
 
                         Text("open today")
-                            .font(.system(size: 13, weight: .light))
+                            .font(.system(size: layout.tileCaptionSize + 1, weight: .light))
                             .foregroundStyle(BeSideColor.navyStart.opacity(0.42))
+                        Spacer(minLength: 0)
                     }
-                    .padding(.top, 10)
+                    .padding(.top, 6)
 
                     if let latest = latestOpen {
                         let forName = latest.isAssignedToMe
                             ? store.displayName
                             : store.partnerDisplayName
-                        VStack(alignment: .leading, spacing: 3) {
+                        VStack(alignment: .leading, spacing: 2) {
                             Text("For \(forName)")
-                                .font(.system(size: 11, weight: .semibold))
+                                .font(.system(size: layout.tileLabelSize, weight: .semibold))
                                 .foregroundStyle(BeSideColor.navyStart.opacity(0.5))
-                            Text(latest.body)
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundStyle(BeSideColor.navyStart.opacity(0.78))
-                                .lineLimit(2)
+                            HStack(alignment: .top, spacing: 6) {
+                                // Task marker — reads as a to-do, not body copy.
+                                Circle()
+                                    .strokeBorder(
+                                        BeSideColor.navyStart.opacity(0.35),
+                                        lineWidth: 1.2
+                                    )
+                                    .frame(width: 8, height: 8)
+                                    .padding(.top, 4)
+                                Text(latest.body)
+                                    .font(.system(size: layout.tileBodySize, weight: .medium))
+                                    .foregroundStyle(BeSideColor.navyStart.opacity(0.78))
+                                    .lineLimit(2)
+                                    .multilineTextAlignment(.leading)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
                         }
-                        .padding(.top, 10)
-                        .padding(.trailing, 40)
+                        .padding(.top, 6)
                     } else {
                         Text(littleThingsEmptyCopy(todayAsksEmpty: todayAsks.isEmpty))
-                            .font(.system(size: 13, weight: .light))
+                            .font(.system(size: layout.tileCaptionSize + 1, weight: .light))
                             .foregroundStyle(BeSideColor.navyStart.opacity(0.4))
                             .lineLimit(3)
-                            .padding(.top, 8)
-                            .padding(.trailing, 40)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.top, 5)
                     }
 
-                    Spacer(minLength: 0)
+                    // Same bottom reserve as Dates — clears the + without indenting copy.
+                    Spacer(minLength: layout.tileBottomReserve)
                 }
-                .padding(12)
+                .padding(layout.tilePad)
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -1464,9 +1645,9 @@ struct UsView: View {
                 openLittleThingsAdd(day: today)
             } label: {
                 Image(systemName: "plus")
-                    .font(.system(size: 14, weight: .bold))
+                    .font(.system(size: layout.tileActionSize * 0.42, weight: .bold))
                     .foregroundStyle(Color.white.opacity(0.95))
-                    .frame(width: 34, height: 34)
+                    .frame(width: layout.tileActionSize, height: layout.tileActionSize)
                     .background {
                         Circle()
                             .fill(BeSideColor.navyFill)
@@ -1474,11 +1655,11 @@ struct UsView: View {
                     }
             }
             .buttonStyle(.plain)
-            .padding(10)
+            .padding(layout.tilePad)
             .accessibilityLabel("Add a little thing")
             .accessibilityIdentifier("us.tile.asks.add")
         }
-        .aspectRatio(0.88, contentMode: .fit)
+        .aspectRatio(layout.tileAspect, contentMode: .fit)
         .beSideGlassChrome(cornerRadius: BeSideMetrics.glassCorner, style: .widgetFrosted)
         .accessibilityLabel(
             latestOpen.map { ask in
@@ -1494,31 +1675,30 @@ struct UsView: View {
 
         return ZStack(alignment: .bottomTrailing) {
             Button {
-                dismissTips()
                 showLoveNotesPage = true
             } label: {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 6) {
                         Text("Love Notes")
-                            .font(.system(size: 11, weight: .semibold))
+                            .font(.system(size: layout.tileLabelSize, weight: .semibold))
                             .tracking(0.8)
                             .textCase(.uppercase)
                             .foregroundStyle(Color.white.opacity(0.55))
                         Spacer(minLength: 0)
                         if tileKind == .incomingActive {
                             Text("\(store.incomingUnreadLoveNotes.count)")
-                                .font(.system(size: 12, weight: .semibold).monospacedDigit())
+                                .font(.system(size: layout.tileCaptionSize, weight: .semibold).monospacedDigit())
                                 .foregroundStyle(BeSideColor.navyStart)
-                                .padding(.horizontal, 7)
+                                .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
                                 .background { Capsule().fill(Color.white.opacity(0.9)) }
                         }
                         if tileKind == .outgoingOnly {
                             Text("\(store.outgoingLoveNotes.count) sent")
-                                .font(.system(size: 11, weight: .semibold).monospacedDigit())
+                                .font(.system(size: layout.tileLabelSize, weight: .semibold).monospacedDigit())
                                 .foregroundStyle(Color.white.opacity(0.9))
-                                .padding(.horizontal, 7)
-                                .padding(.vertical, 3)
+                                .padding(.horizontal, 6)
+                                .padding(.vertical, 2)
                                 .background {
                                     Capsule()
                                         .fill(Color.white.opacity(0.18))
@@ -1530,12 +1710,12 @@ struct UsView: View {
                     }
 
                     Image(systemName: "heart.fill")
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(.system(size: layout.tileBodySize + 3, weight: .semibold))
                         .foregroundStyle(BeSideColor.loveNotePinkBright)
-                        .padding(.top, 2)
+                        .padding(.top, 1)
 
                     Text(tileBodyText)
-                        .font(.system(size: 14, weight: isActive ? .semibold : .medium))
+                        .font(.system(size: layout.tileBodySize, weight: isActive ? .semibold : .medium))
                         .foregroundStyle(BeSideColor.navyLabel)
                         .multilineTextAlignment(.leading)
                         .lineLimit(3)
@@ -1543,29 +1723,28 @@ struct UsView: View {
 
                     if !tileSubtitleText.isEmpty {
                         Text(tileSubtitleText)
-                            .font(.system(size: 12, weight: .light))
+                            .font(.system(size: layout.tileCaptionSize, weight: .light))
                             .foregroundStyle(Color.white.opacity(0.62))
                     }
 
                     Spacer(minLength: 0)
                 }
-                .padding(12)
-                .padding(.bottom, 36)
+                .padding(layout.tilePad)
+                .padding(.bottom, layout.tileBottomReserve)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
             Button {
-                dismissTips()
                 withAnimation(.easeOut(duration: 0.2)) {
                     showLoveNoteCompose = true
                 }
             } label: {
                 Image(systemName: "pencil")
-                    .font(.system(size: 13, weight: .semibold))
+                    .font(.system(size: layout.tileActionSize * 0.4, weight: .semibold))
                     .foregroundStyle(Color.white.opacity(0.95))
-                    .frame(width: 34, height: 34)
+                    .frame(width: layout.tileActionSize, height: layout.tileActionSize)
                     .background {
                         Circle()
                             .fill(Color.white.opacity(0.18))
@@ -1573,11 +1752,11 @@ struct UsView: View {
                     }
             }
             .buttonStyle(.plain)
-            .padding(10)
+            .padding(layout.tilePad)
             .accessibilityLabel("Leave a love note")
             .accessibilityIdentifier("us.tile.lovenotes.compose")
         }
-        .aspectRatio(0.88, contentMode: .fit)
+        .aspectRatio(layout.tileAspect, contentMode: .fit)
         .background { usGlassChrome(.notes) }
         .clipShape(RoundedRectangle(cornerRadius: BeSideMetrics.glassCorner, style: .continuous))
         .accessibilityLabel("Open love notes")
@@ -1587,44 +1766,45 @@ struct UsView: View {
     private var usScreenTile: some View {
         ZStack(alignment: .bottomTrailing) {
             Button {
-                dismissTips()
                 showScreenPhotoPage = true
             } label: {
                 VStack(alignment: .leading, spacing: 0) {
                     Text("Shared Moments")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(.system(size: layout.tileLabelSize, weight: .semibold))
                         .tracking(0.8)
                         .textCase(.uppercase)
                         .foregroundStyle(BeSideColor.navyStart.opacity(0.4))
 
-                    Spacer(minLength: 8)
-
-                    screenPhotoPreviewThumb
-
                     Text(sharedMomentsTileCopy)
-                        .font(.system(size: 13, weight: .medium))
+                        .font(.system(size: layout.tileCaptionSize + 1, weight: .medium))
                         .foregroundStyle(BeSideColor.navyStart.opacity(0.78))
                         .lineLimit(3)
-                        .padding(.top, 8)
-                        .padding(.trailing, 44)
+                        .multilineTextAlignment(.leading)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Spacer(minLength: 6)
+
+                    screenPhotoPreviewThumb
+                        .frame(maxWidth: .infinity, alignment: .leading)
 
                     Spacer(minLength: 0)
                 }
-                .padding(12)
-                .padding(.bottom, 36)
+                .padding(layout.tilePad)
+                .padding(.bottom, layout.tileBottomReserve)
                 .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
 
             Button {
-                dismissTips()
                 showSharedMomentSourceSheet = true
             } label: {
                 Image(systemName: "camera.fill")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: layout.tileActionSize * 0.4, weight: .semibold))
                     .foregroundStyle(Color.white.opacity(0.95))
-                    .frame(width: 34, height: 34)
+                    .frame(width: layout.tileActionSize, height: layout.tileActionSize)
                     .background {
                         Circle()
                             .fill(BeSideColor.navyFill)
@@ -1632,15 +1812,13 @@ struct UsView: View {
                     }
             }
             .buttonStyle(.plain)
-            .padding(10)
+            .padding(layout.tilePad)
             .accessibilityLabel("Add a photo — camera or library")
             .accessibilityIdentifier("us.tile.screen.camera")
         }
-        .aspectRatio(0.88, contentMode: .fit)
+        .aspectRatio(layout.tileAspect, contentMode: .fit)
         .beSideGlassChrome(cornerRadius: BeSideMetrics.glassCorner, style: .widgetFrosted)
-        .accessibilityLabel(
-            "Shared Moments. Send each other photos — keep one on a home-screen widget."
-        )
+        .accessibilityLabel("Shared Moments. \(sharedMomentsTileCopy).")
         .accessibilityIdentifier("us.screen.card")
     }
 
@@ -1737,7 +1915,6 @@ struct UsView: View {
 
     private func loveNoteCard(note: LoveNote?, isPrimary: Bool) -> some View {
         return Button {
-            dismissTips()
             showLoveNotesPage = true
             if let note, note.direction == .incoming {
                 loveNoteReading = note
@@ -1907,10 +2084,10 @@ struct UsView: View {
             return "Pair to share photos on a home-screen widget"
         case .pairedWaiting:
             return store.sharedMomentPhotoJPEG == nil
-                ? "Share the first photo — \(store.partnerDisplayName) hasn’t added one yet"
+                ? "Add the first photo for your widget"
                 : "Your photo is ready for the widget"
         case .pairedActive:
-            return "Send each other photos — keep one on a home-screen widget"
+            return "Share photos and pin one to your widget"
         }
     }
 

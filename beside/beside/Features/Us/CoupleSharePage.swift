@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 
 /// Full-screen couple share — navy shell like Daily Task, light card for Stories.
 struct CoupleSharePage: View {
@@ -60,9 +59,8 @@ struct CoupleSharePage: View {
                     InstagramStoriesShare.shareCoupleStory(
                         meName: store.displayName,
                         partnerName: store.partnerDisplayName,
-                        meJPEG: store.meAvatarJPEG,
-                        partnerJPEG: store.partnerAvatarJPEG,
-                        subtitle: store.timeTogetherPhrase
+                        style: store.timeTogetherStyle,
+                        relationshipStart: store.relationshipStartDate
                     )
                 }
                 .padding(.horizontal, 24)
@@ -111,15 +109,15 @@ struct CoupleSharePage: View {
         CoupleStoryShareCard(
             meName: store.displayName,
             partnerName: store.partnerDisplayName,
-            mePhoto: store.meAvatarJPEG.flatMap(UIImage.init(data:)),
-            partnerPhoto: store.partnerAvatarJPEG.flatMap(UIImage.init(data:)),
-            subtitle: store.timeTogetherPhrase
+            style: store.timeTogetherStyle,
+            relationshipStart: store.relationshipStartDate
         )
         .frame(maxWidth: .infinity)
         .scaleEffect(1.05)
         .padding(.vertical, 8)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(store.coupleHeroTitle). \(store.timeTogetherPhrase)")
+        .animation(.easeInOut(duration: 0.2), value: store.timeTogetherStyle)
     }
 
     private var stylePicker: some View {

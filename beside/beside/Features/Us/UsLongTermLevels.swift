@@ -84,35 +84,58 @@ enum UsTimeTogether {
         return f
     }()
 
+    /// Calendar breakdown for share-card counters (Full look).
+    struct Breakdown: Equatable, Sendable {
+        var years: Int
+        var months: Int
+        var days: Int
+        /// Total whole days since start (Days look).
+        var totalDays: Int
+        var sinceLabel: String
+    }
+
+    static func breakdown(
+        since startDate: Date,
+        now: Date = Date(),
+        calendar: Calendar = .current
+    ) -> Breakdown {
+        let start = calendar.startOfDay(for: startDate)
+        let end = calendar.startOfDay(for: now)
+        let parts = calendar.dateComponents([.year, .month, .day], from: start, to: end)
+        let totalDays = max(0, calendar.dateComponents([.day], from: start, to: end).day ?? 0)
+        return Breakdown(
+            years: max(0, parts.year ?? 0),
+            months: max(0, parts.month ?? 0),
+            days: max(0, parts.day ?? 0),
+            totalDays: totalDays,
+            sinceLabel: sinceFormatter.string(from: start)
+        )
+    }
+
     static func phrase(
         since startDate: Date,
         style: Style = .detailed,
         now: Date = Date(),
         calendar: Calendar = .current
     ) -> String {
-        let start = calendar.startOfDay(for: startDate)
-        let end = calendar.startOfDay(for: now)
+        let parts = breakdown(since: startDate, now: now, calendar: calendar)
 
         switch style {
         case .daysOnly:
-            let days = max(0, calendar.dateComponents([.day], from: start, to: end).day ?? 0)
+            let days = parts.totalDays
             return "together for \(days) day\(days == 1 ? "" : "s")"
         case .sinceDate:
-            return "since \(sinceFormatter.string(from: start))"
+            return "since \(parts.sinceLabel)"
         case .detailed:
-            let parts = calendar.dateComponents([.year, .month, .day], from: start, to: end)
-            let years = max(0, parts.year ?? 0)
-            let months = max(0, parts.month ?? 0)
-            let days = max(0, parts.day ?? 0)
             var chunks: [String] = []
-            if years > 0 {
-                chunks.append("\(years) year\(years == 1 ? "" : "s")")
+            if parts.years > 0 {
+                chunks.append("\(parts.years) year\(parts.years == 1 ? "" : "s")")
             }
-            if months > 0 {
-                chunks.append("\(months) month\(months == 1 ? "" : "s")")
+            if parts.months > 0 {
+                chunks.append("\(parts.months) month\(parts.months == 1 ? "" : "s")")
             }
-            if days > 0 || chunks.isEmpty {
-                chunks.append("\(days) day\(days == 1 ? "" : "s")")
+            if parts.days > 0 || chunks.isEmpty {
+                chunks.append("\(parts.days) day\(parts.days == 1 ? "" : "s")")
             }
             return "together for \(chunks.joined(separator: ", "))"
         }

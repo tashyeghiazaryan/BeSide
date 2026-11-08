@@ -272,8 +272,7 @@ final class besideUITests: XCTestCase {
         screen(app, "tab.connection").tap()
         XCTAssertTrue(screen(app, "screen.connection").waitForExistence(timeout: 5))
         XCTAssertTrue(screen(app, "connection.carousel").waitForExistence(timeout: 3))
-        XCTAssertTrue(screen(app, "connection.pill").waitForExistence(timeout: 2))
-        XCTAssertTrue(screen(app, "connection.sections").waitForExistence(timeout: 2))
+        XCTAssertTrue(screen(app, "connection.dots").waitForExistence(timeout: 2))
 
         let openCTA = screen(app, "connection.cta.activity")
         XCTAssertTrue(openCTA.waitForExistence(timeout: 3), "Expected Today's Activity CTA on first slide")
@@ -306,41 +305,41 @@ final class besideUITests: XCTestCase {
     }
 
     @MainActor
-    func testConnectionSectionsIndexOpensSection() throws {
+    func testConnectionTilesOpenSections() throws {
         let app = XCUIApplication()
         app.launch()
 
         screen(app, "tab.connection").tap()
-        XCTAssertTrue(screen(app, "connection.sections").waitForExistence(timeout: 5))
-        screen(app, "connection.sections").tap()
+        XCTAssertTrue(screen(app, "connection.dots").waitForExistence(timeout: 5))
+        XCTAssertTrue(screen(app, "connection.tile.todays-activity").waitForExistence(timeout: 2))
+        XCTAssertTrue(screen(app, "connection.tile.question-of-the-day").waitForExistence(timeout: 2))
+        XCTAssertTrue(screen(app, "connection.tile.partner-quiz").waitForExistence(timeout: 2))
+        XCTAssertTrue(screen(app, "connection.tile.try-premium").waitForExistence(timeout: 2))
 
-        XCTAssertTrue(screen(app, "connection.sections.page").waitForExistence(timeout: 3))
-        XCTAssertTrue(screen(app, "connection.sections.row.todays-activity").waitForExistence(timeout: 2))
-        XCTAssertTrue(screen(app, "connection.sections.row.question-of-the-day").waitForExistence(timeout: 2))
-        XCTAssertTrue(screen(app, "connection.sections.row.partner-quiz").waitForExistence(timeout: 2))
-        XCTAssertTrue(screen(app, "connection.sections.row.try-premium").waitForExistence(timeout: 2))
-
-        screen(app, "connection.sections.open.partner-quiz").tap()
+        screen(app, "connection.tile.partner-quiz").tap()
+        let quizCTA = screen(app, "connection.cta.quiz")
+        XCTAssertTrue(quizCTA.waitForExistence(timeout: 2))
+        quizCTA.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(screen(app, "connection.quiz.hub").waitForExistence(timeout: 3))
         XCTAssertTrue(screen(app, "tab.bar").waitForExistence(timeout: 2), "Tab bar stays visible (light) inside Partner Quiz")
         screen(app, "connection.quiz.back").tap()
 
-        screen(app, "connection.sections").tap()
-        XCTAssertTrue(screen(app, "connection.sections.page").waitForExistence(timeout: 3))
-        screen(app, "connection.sections.open.try-premium").tap()
+        screen(app, "connection.tile.try-premium").tap()
         XCTAssertTrue(screen(app, "connection.carousel").waitForExistence(timeout: 3))
         XCTAssertTrue(screen(app, "connection.cta.start").waitForExistence(timeout: 2))
 
-        screen(app, "connection.sections").tap()
-        XCTAssertTrue(screen(app, "connection.sections.page").waitForExistence(timeout: 3))
-        screen(app, "connection.sections.open.question-of-the-day").tap()
+        screen(app, "connection.tile.question-of-the-day").tap()
+        let qotdCTA = screen(app, "connection.cta.qotd")
+        XCTAssertTrue(qotdCTA.waitForExistence(timeout: 2))
+        qotdCTA.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(screen(app, "connection.qotd.hub").waitForExistence(timeout: 3))
         XCTAssertFalse(screen(app, "tab.bar").exists, "Tab bar should be hidden inside Question of the day")
         screen(app, "connection.qotd.back").tap()
 
-        screen(app, "connection.sections").tap()
-        XCTAssertTrue(screen(app, "connection.sections.page").waitForExistence(timeout: 3))
-        screen(app, "connection.sections.open.todays-activity").tap()
+        screen(app, "connection.tile.todays-activity").tap()
+        let activityCTA = screen(app, "connection.cta.activity")
+        XCTAssertTrue(activityCTA.waitForExistence(timeout: 2))
+        activityCTA.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
         XCTAssertTrue(screen(app, "connection.activity.hub").waitForExistence(timeout: 3))
     }
 
@@ -350,10 +349,11 @@ final class besideUITests: XCTestCase {
         app.launch()
 
         screen(app, "tab.connection").tap()
-        XCTAssertTrue(screen(app, "connection.sections").waitForExistence(timeout: 5))
-        screen(app, "connection.sections").tap()
-        XCTAssertTrue(screen(app, "connection.sections.page").waitForExistence(timeout: 3))
-        screen(app, "connection.sections.open.partner-quiz").tap()
+        XCTAssertTrue(screen(app, "connection.tile.partner-quiz").waitForExistence(timeout: 5))
+        screen(app, "connection.tile.partner-quiz").tap()
+        let quizCTA = screen(app, "connection.cta.quiz")
+        XCTAssertTrue(quizCTA.waitForExistence(timeout: 2))
+        quizCTA.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
 
         XCTAssertTrue(screen(app, "connection.quiz.hub").waitForExistence(timeout: 3))
         XCTAssertTrue(screen(app, "connection.quiz.howto").waitForExistence(timeout: 2))
@@ -399,10 +399,11 @@ final class besideUITests: XCTestCase {
         app.launch()
 
         screen(app, "tab.connection").tap()
-        XCTAssertTrue(screen(app, "connection.sections").waitForExistence(timeout: 5))
-        screen(app, "connection.sections").tap()
-        XCTAssertTrue(screen(app, "connection.sections.page").waitForExistence(timeout: 3))
-        screen(app, "connection.sections.open.question-of-the-day").tap()
+        XCTAssertTrue(screen(app, "connection.tile.question-of-the-day").waitForExistence(timeout: 5))
+        screen(app, "connection.tile.question-of-the-day").tap()
+        let qotdCTA = screen(app, "connection.cta.qotd")
+        XCTAssertTrue(qotdCTA.waitForExistence(timeout: 2))
+        qotdCTA.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
 
         XCTAssertTrue(screen(app, "connection.qotd.hub").waitForExistence(timeout: 3))
         XCTAssertTrue(screen(app, "connection.qotd.question").exists)

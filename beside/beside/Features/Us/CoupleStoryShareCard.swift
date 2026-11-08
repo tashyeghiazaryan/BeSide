@@ -1,59 +1,60 @@
 import SwiftUI
-import UIKit
 
 /// Story sticker rendered for Instagram Stories share — soft BeSide couple card.
 struct CoupleStoryShareCard: View {
     let meName: String
     let partnerName: String
-    let mePhoto: UIImage?
-    let partnerPhoto: UIImage?
-    let subtitle: String
+    var style: UsTimeTogether.Style = .detailed
+    var relationshipStart: Date = Date()
 
     private let ink = Color(hex: 0x26282B)
-    private let rose = Color(hex: 0xE8BEC9)
-    private let roseLight = Color(hex: 0xF3D6DE)
-    private let roseDeep = Color(hex: 0xD9A8B6)
+    private let accent = Color(hex: 0xC48A9A)
+
+    private var breakdown: UsTimeTogether.Breakdown {
+        UsTimeTogether.breakdown(since: relationshipStart)
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(spacing: 0) {
             HStack(spacing: 8) {
-                BesideLogoMark(size: 22)
+                BesideLogoMark(size: 20)
                 Text("beside")
-                    .font(.system(size: 16, weight: .ultraLight))
+                    .font(.system(size: 15, weight: .ultraLight))
                     .tracking(1.0)
-                    .foregroundStyle(ink.opacity(0.55))
+                    .foregroundStyle(ink.opacity(0.5))
                 Spacer(minLength: 0)
             }
-            .padding(.bottom, 28)
-
-            HStack {
-                Spacer(minLength: 0)
-                HStack(spacing: -14) {
-                    avatar(image: mePhoto, name: meName)
-                    avatar(image: partnerPhoto, name: partnerName)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.bottom, 20)
+            .padding(.bottom, 22)
 
             Text("\(meName) & \(partnerName)")
-                .font(.system(size: 32, weight: .thin))
-                .tracking(0.35)
+                .font(.system(size: 30, weight: .thin))
+                .tracking(0.3)
                 .foregroundStyle(ink.opacity(0.9))
                 .multilineTextAlignment(.center)
-                .frame(maxWidth: .infinity)
+                .lineLimit(2)
+                .minimumScaleFactor(0.85)
                 .padding(.bottom, 12)
 
-            Text(subtitle)
-                .font(.system(size: 18, weight: .light))
-                .tracking(0.15)
-                .foregroundStyle(Color(hex: 0xC48A9A))
+            Text(style == .sinceDate ? "together since" : "together for")
+                .font(.system(size: 13, weight: .medium))
+                .tracking(1.2)
+                .textCase(.uppercase)
+                .foregroundStyle(accent.opacity(0.85))
+                .padding(.bottom, 10)
+
+            timeTogetherBody
+                .padding(.bottom, 18)
+
+            Text(UsCoupleShareWarmth.line())
+                .font(.system(size: 14, weight: .light))
+                .tracking(0.2)
+                .foregroundStyle(ink.opacity(0.42))
                 .multilineTextAlignment(.center)
                 .frame(maxWidth: .infinity)
         }
-        .padding(.horizontal, 28)
-        .padding(.top, 22)
-        .padding(.bottom, 32)
+        .padding(.horizontal, 26)
+        .padding(.top, 16)
+        .padding(.bottom, 26)
         .frame(width: 340)
         .background {
             RoundedRectangle(cornerRadius: 32, style: .continuous)
@@ -76,40 +77,57 @@ struct CoupleStoryShareCard: View {
         }
     }
 
-    private func avatar(image: UIImage?, name: String) -> some View {
-        Group {
-            if let image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
-            } else {
-                Text(String(name.prefix(1)).uppercased())
-                    .font(.system(size: 18, weight: .light))
-                    .foregroundStyle(ink.opacity(0.72))
+    @ViewBuilder
+    private var timeTogetherBody: some View {
+        switch style {
+        case .detailed:
+            HStack(spacing: 0) {
+                counterBlock(value: breakdown.years, unit: breakdown.years == 1 ? "year" : "years")
+                counterDivider
+                counterBlock(value: breakdown.months, unit: breakdown.months == 1 ? "month" : "months")
+                counterDivider
+                counterBlock(value: breakdown.days, unit: breakdown.days == 1 ? "day" : "days")
             }
+            .frame(maxWidth: .infinity)
+        case .daysOnly:
+            VStack(spacing: 4) {
+                Text("\(breakdown.totalDays)")
+                    .font(.system(size: 36, weight: .ultraLight, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(ink.opacity(0.88))
+                Text(breakdown.totalDays == 1 ? "day" : "days")
+                    .font(.system(size: 11, weight: .medium))
+                    .tracking(0.8)
+                    .textCase(.uppercase)
+                    .foregroundStyle(ink.opacity(0.38))
+            }
+            .frame(maxWidth: .infinity)
+        case .sinceDate:
+            Text(breakdown.sinceLabel)
+                .font(.system(size: 30, weight: .ultraLight, design: .rounded))
+                .foregroundStyle(ink.opacity(0.9))
+                .frame(maxWidth: .infinity)
         }
-        .frame(width: 56, height: 56)
-        .background {
-            Circle()
-                .fill(rose.opacity(0.18))
-                .overlay {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    roseLight.opacity(0.4),
-                                    rose.opacity(0.34),
-                                    roseDeep.opacity(0.3),
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                }
+    }
+
+    private func counterBlock(value: Int, unit: String) -> some View {
+        VStack(spacing: 4) {
+            Text("\(value)")
+                .font(.system(size: 30, weight: .ultraLight, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(ink.opacity(0.9))
+            Text(unit)
+                .font(.system(size: 10, weight: .medium))
+                .tracking(0.6)
+                .textCase(.uppercase)
+                .foregroundStyle(ink.opacity(0.36))
         }
-        .clipShape(Circle())
-        .overlay {
-            Circle().stroke(Color.white.opacity(0.9), lineWidth: 2)
-        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var counterDivider: some View {
+        Rectangle()
+            .fill(ink.opacity(0.08))
+            .frame(width: 1, height: 36)
     }
 }

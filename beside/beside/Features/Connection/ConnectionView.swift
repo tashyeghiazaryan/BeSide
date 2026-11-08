@@ -10,8 +10,8 @@ struct ConnectionView: View {
     @State private var showTodaysActivity = false
     @State private var showQuestionOfTheDay = false
     @State private var showPartnerQuiz = false
-    @State private var showSections = false
     @State private var autoAdvanceToken = UUID()
+    @State private var layout = BeSideMetrics.ConnectionLayout.standard
 
     private let autoAdvanceSeconds: TimeInterval = 8
     private let swipeThreshold: CGFloat = 48
@@ -26,7 +26,7 @@ struct ConnectionView: View {
     }
 
     private var isOverlayOpen: Bool {
-        showTodaysActivity || showQuestionOfTheDay || showPartnerQuiz || showSections
+        showTodaysActivity || showQuestionOfTheDay || showPartnerQuiz
     }
 
     private var activitySlide: ConnectionCarouselSlide {
@@ -37,7 +37,7 @@ struct ConnectionView: View {
         ZStack {
             // Bound the carousel to the offered size so AsyncImage cannot inflate the root shell / tab bar.
             GeometryReader { geo in
-                carouselLayer(size: geo.size)
+                carouselLayer(size: geo.size, layout: layout)
             }
 
             if showTodaysActivity {
@@ -83,27 +83,12 @@ struct ConnectionView: View {
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
                 .zIndex(10)
             }
-
-            if showSections {
-                ConnectionSectionsPage(
-                    slides: slides,
-                    onClose: {
-                        withAnimation(.easeOut(duration: 0.28)) {
-                            showSections = false
-                        }
-                        bumpAutoAdvance()
-                    },
-                    onOpen: openSection
-                )
-                .zIndex(20)
-            }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color(hex: 0x0A0A0A).ignoresSafeArea())
+        .background(BeSideBackground.softCanvas.ignoresSafeArea())
         .animation(.easeOut(duration: 0.28), value: showTodaysActivity)
         .animation(.easeOut(duration: 0.28), value: showQuestionOfTheDay)
         .animation(.easeOut(duration: 0.28), value: showPartnerQuiz)
-        .animation(.easeOut(duration: 0.28), value: showSections)
         .onAppear { bumpAutoAdvance() }
         .onChange(of: showTodaysActivity) { _, open in
             if !open { bumpAutoAdvance() }
@@ -114,190 +99,209 @@ struct ConnectionView: View {
         .onChange(of: showPartnerQuiz) { _, open in
             if !open { bumpAutoAdvance() }
         }
-        .onChange(of: showSections) { _, open in
-            if !open { bumpAutoAdvance() }
-        }
         .onChange(of: autoAdvanceToken) { _, token in
             scheduleAutoAdvance(token: token)
         }
-        // Dark tab chrome only over the carousel; light bar inside hubs / Sections.
-        .prefersDarkFloatingTabBar(!isOverlayOpen && store.isPaired)
+        // Same light floating tab bar as Me / Partner / Us / More.
+        .prefersDarkFloatingTabBar(false)
+        .onGeometryChange(for: BeSideMetrics.ConnectionLayout.self) { proxy in
+            BeSideMetrics.ConnectionLayout.resolve(
+                width: proxy.size.width,
+                height: max(proxy.size.height, UIScreen.main.bounds.height),
+                safeBottom: proxy.safeAreaInsets.bottom
+            )
+        } action: { newLayout in
+            layout = newLayout
+        }
         .accessibilityElement(children: .contain)
         .accessibilityIdentifier(AppTab.connection.screenIdentifier)
         .pairingRequiredGate(store: store, session: session)
     }
 
-    private func carouselLayer(size: CGSize) -> some View {
-        ZStack {
-            slideMedia(currentSlide, size: size)
-                .id(currentSlide.id)
-                .transition(.opacity)
-                .animation(.easeInOut(duration: 0.35), value: currentSlide.id)
+    private func carouselLayer(size: CGSize, layout: BeSideMetrics.ConnectionLayout) -> some View {
+        let horizontalInset = layout.pageInset
+        let topPad: CGFloat = 4
+        let contentHeight = max(size.height - layout.tabBarClearance - topPad, 1)
+        let mediaHeight = contentHeight * layout.mediaFraction
+        let mediaWidth = size.width - horizontalInset * 2
+        let mediaSize = CGSize(width: mediaWidth, height: mediaHeight)
+        let corner = BeSideMetrics.glassCornerLarge
 
-            LinearGradient(
-                colors: [
-                    Color.black.opacity(0.55),
-                    Color.black.opacity(0.2),
-                    Color.black.opacity(0.5),
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .allowsHitTesting(false)
+        return VStack(spacing: layout.gap) {
+            ZStack {
+                slideMedia(currentSlide, size: mediaSize)
+                    .id(currentSlide.id)
+                    .transition(.opacity)
+                    .animation(.easeInOut(duration: 0.35), value: currentSlide.id)
 
-            // Top chrome — pill centered, sections badge trailing
-            VStack(spacing: 0) {
-                ZStack {
-                    connectionPill
-                    HStack {
-                        Spacer(minLength: 0)
-                        sectionsBadge
-                    }
-                }
-                .padding(.top, 8)
-                .padding(.horizontal, 12)
-
-                if slides.count > 1 {
-                    HStack {
-                        Spacer(minLength: 0)
-                        pageDots
-                    }
-                    .padding(.trailing, 12)
-                    .padding(.top, 10)
-                }
-
-                if store.coupleSurfaceState == .pairedWaiting {
-                    Text("Waiting for \(store.partnerDisplayName) to join today’s prompts")
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color.white.opacity(0.82))
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background {
-                            Capsule()
-                                .fill(Color.black.opacity(0.35))
-                                .overlay {
-                                    Capsule().stroke(Color.white.opacity(0.2), lineWidth: 0.8)
-                                }
-                        }
-                        .padding(.top, 12)
-                        .accessibilityIdentifier("connection.waiting.banner")
-                }
-
-                Spacer(minLength: 0)
-            }
-
-            // Copy — upper third, left-aligned (Figma top overlay ~5.5rem from safe top)
-            VStack(spacing: 0) {
-                slideCopy
-                    .padding(.horizontal, 16)
-                    .padding(.top, 88)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                Spacer(minLength: 0)
-            }
-            .allowsHitTesting(false)
-
-            // CTA — vertically centered (Figma `inset-0 flex items-center justify-center`)
-            startButton
-
-            // Dedicated AX marker — avoid putting the carousel id on the drag container
-            // (that overwrites child identifiers like pill / sections / CTA).
-            Color.clear
-                .frame(width: 1, height: 1)
-                .accessibilityIdentifier("connection.carousel")
-                .accessibilityLabel("Connection carousel")
+                LinearGradient(
+                    colors: [
+                        Color.white.opacity(0.55),
+                        Color.white.opacity(0.05),
+                        Color(hex: 0xFCE7F3).opacity(0.28),
+                        Color.white.opacity(0.72),
+                    ],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
                 .allowsHitTesting(false)
+
+                VStack(spacing: 0) {
+                    if store.coupleSurfaceState == .pairedWaiting {
+                        Text("Waiting for \(store.partnerDisplayName) to join today’s prompts")
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(BeSideColor.textPrimary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 8)
+                            .beSideGlassChrome(cornerRadius: 20, style: .widgetFrosted)
+                            .padding(.top, 14)
+                            .padding(.horizontal, 16)
+                            .accessibilityIdentifier("connection.waiting.banner")
+                    }
+
+                    Spacer(minLength: 0)
+
+                    slideCopy(layout: layout)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, layout.mediaBottomPad)
+                }
+
+                Color.clear
+                    .frame(width: 1, height: 1)
+                    .accessibilityIdentifier("connection.carousel")
+                    .accessibilityLabel("Connection carousel")
+                    .allowsHitTesting(false)
+            }
+            .frame(width: mediaWidth, height: mediaHeight)
+            .clipShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: corner, style: .continuous)
+                    .stroke(Color.white.opacity(0.72), lineWidth: 1)
+            }
+            .shadow(color: Color.black.opacity(0.08), radius: 18, y: 8)
+            .shadow(color: BeSideColor.loveNotePinkDeep.opacity(0.12), radius: 22, y: 10)
+            .contentShape(RoundedRectangle(cornerRadius: corner, style: .continuous))
+            .gesture(
+                DragGesture(minimumDistance: 16)
+                    .onEnded { value in
+                        let dx = value.translation.width
+                        if dx > swipeThreshold {
+                            goPrev()
+                        } else if dx < -swipeThreshold {
+                            goNext()
+                        }
+                    }
+            )
+            .padding(.horizontal, horizontalInset)
+
+            slideTileGrid(layout: layout)
+                .padding(.horizontal, horizontalInset)
+
+            startButton
+                .padding(.horizontal, horizontalInset)
+
+            Spacer(minLength: 0)
         }
+        .padding(.top, topPad)
+        .padding(.bottom, layout.tabBarClearance)
         .frame(width: size.width, height: size.height)
-        .clipped()
-        .contentShape(Rectangle())
-        .gesture(
-            DragGesture(minimumDistance: 16)
-                .onEnded { value in
-                    let dx = value.translation.width
-                    if dx > swipeThreshold {
-                        goPrev()
-                    } else if dx < -swipeThreshold {
-                        goNext()
+    }
+
+    private func slideTileGrid(layout: BeSideMetrics.ConnectionLayout) -> some View {
+        let spacing = layout.gridSpacing
+        let tileHeight: CGFloat = layout.tileLabelSize <= 12 ? 54 : 58
+        let rows: [[Int]] = [
+            Array(0..<min(2, slides.count)),
+            Array(2..<min(4, slides.count)),
+        ].filter { !$0.isEmpty }
+
+        return VStack(spacing: spacing) {
+            ForEach(Array(rows.enumerated()), id: \.offset) { _, columns in
+                HStack(spacing: spacing) {
+                    ForEach(columns, id: \.self) { index in
+                        let slide = slides[index]
+                        Button {
+                            withAnimation(.easeInOut(duration: 0.25)) {
+                                carouselIndex = index
+                            }
+                            bumpAutoAdvance()
+                        } label: {
+                            slideTile(slide, isActive: index == safeIndex, layout: layout)
+                        }
+                        .buttonStyle(.plain)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: tileHeight)
+                        .accessibilityLabel(tileTitle(for: slide))
+                        .accessibilityIdentifier("connection.tile.\(slide.id)")
+                        .accessibilityAddTraits(index == safeIndex ? .isSelected : AccessibilityTraits())
                     }
                 }
-        )
-    }
-
-    private var connectionPill: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "sparkle")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(BeSideColor.tabActiveOnDark.opacity(0.85))
-            Text("Connection")
-                .font(.system(size: 10, weight: .light))
-                .tracking(2.2)
-                .textCase(.uppercase)
-                .foregroundStyle(BeSideColor.tabActiveOnDark)
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-        .beSideGlassChrome(cornerRadius: 20, style: .dark)
-        .accessibilityElement(children: .combine)
-        .accessibilityIdentifier("connection.pill")
-    }
-
-    private var sectionsBadge: some View {
-        Button {
-            withAnimation(.easeOut(duration: 0.28)) {
-                showSections = true
-            }
-        } label: {
-            Image(systemName: "square.grid.2x2")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(BeSideColor.tabActiveOnDark)
-                .frame(width: 40, height: 40)
-                .beSideGlassChrome(cornerRadius: 20, style: .dark)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Connection sections")
-        .accessibilityIdentifier("connection.sections")
-    }
-
-    private var pageDots: some View {
-        HStack(spacing: 6) {
-            ForEach(Array(slides.enumerated()), id: \.element.id) { index, _ in
-                Button {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        carouselIndex = index
-                    }
-                    bumpAutoAdvance()
-                } label: {
-                    Capsule()
-                        .fill(index == safeIndex ? Color.white : Color.white.opacity(0.35))
-                        .frame(width: index == safeIndex ? 20 : 6, height: 6)
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("Slide \(index + 1)")
             }
         }
+        .frame(maxWidth: .infinity)
+        .animation(.easeInOut(duration: 0.28), value: safeIndex)
         .accessibilityIdentifier("connection.dots")
     }
 
-    private var slideCopy: some View {
-        VStack(alignment: .leading, spacing: 14) {
+    private func slideTile(
+        _ slide: ConnectionCarouselSlide,
+        isActive: Bool,
+        layout: BeSideMetrics.ConnectionLayout
+    ) -> some View {
+        Text(tileTitle(for: slide))
+            .font(.system(size: layout.tileLabelSize, weight: .semibold))
+            .foregroundStyle(BeSideColor.navyStart.opacity(isActive ? 0.9 : 0.62))
+            .multilineTextAlignment(.center)
+            .lineLimit(2)
+            .minimumScaleFactor(0.7)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .beSideGlassChrome(cornerRadius: BeSideMetrics.glassCorner, style: .widgetFrosted)
+            .overlay {
+                RoundedRectangle(cornerRadius: BeSideMetrics.glassCorner, style: .continuous)
+                    .stroke(
+                        isActive
+                            ? BeSideColor.loveNotePinkDeep.opacity(0.75)
+                            : Color.clear,
+                        lineWidth: 1.5
+                    )
+            }
+            .scaleEffect(isActive ? 1.015 : 1)
+            .opacity(isActive ? 1 : 0.88)
+    }
+
+    private func tileTitle(for slide: ConnectionCarouselSlide) -> String {
+        if slide.isTodaysActivity { return "Today's Activity" }
+        if slide.isQuestionOfTheDay { return "Question of the day" }
+        if slide.isPartnerQuiz { return "How well do you know your partner" }
+        if slide.id == "try-premium" { return "Premium" }
+        return slide.title ?? "Connection"
+    }
+
+    private func slideCopy(layout: BeSideMetrics.ConnectionLayout) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
             if let title = currentSlide.title {
                 Text(title)
-                    .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(Color.white)
-                    .shadow(color: .black.opacity(0.5), radius: 10, y: 1)
+                    .font(.system(size: layout.titleSize, weight: .medium))
+                    .tracking(0.2)
+                    .foregroundStyle(BeSideColor.navyStart.opacity(0.88))
                     .fixedSize(horizontal: false, vertical: true)
             }
             if let body = currentSlide.body {
                 Text(body)
-                    .font(.system(size: 17, weight: .regular))
-                    .foregroundStyle(Color.white.opacity(0.92))
+                    .font(.system(size: layout.bodySize, weight: .regular))
+                    .foregroundStyle(BeSideColor.navyStart.opacity(0.58))
                     .lineSpacing(3)
-                    .shadow(color: .black.opacity(0.45), radius: 8, y: 1)
+                    .lineLimit(4)
+                    .minimumScaleFactor(0.85)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .frame(maxWidth: 360, alignment: .leading)
+        .padding(layout.copyPadding)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .beSideGlassChrome(cornerRadius: BeSideMetrics.glassCorner, style: .widgetFrosted)
         .accessibilityIdentifier("connection.slide.copy")
     }
 
@@ -307,10 +311,13 @@ struct ConnectionView: View {
         } label: {
             Text(currentSlide.isTodaysActivity ? "Open your task for today!" : "Start")
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(BeSideColor.tabActive)
-                .padding(.horizontal, 28)
-                .padding(.vertical, 14)
-                .beSideGlassChrome(cornerRadius: BeSideMetrics.tabBarCorner, style: .solidOnDark)
+                .foregroundStyle(BeSideColor.navyLabel)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 15)
+                .background {
+                    Capsule().fill(BeSideColor.navyFill)
+                }
+                .shadow(color: BeSideColor.navyStart.opacity(0.18), radius: 12, y: 5)
         }
         .buttonStyle(.plain)
         .accessibilityIdentifier(startAccessibilityID)
@@ -345,7 +352,7 @@ struct ConnectionView: View {
                     case .empty:
                         ZStack {
                             mediaFallback
-                            ProgressView().tint(.white.opacity(0.7))
+                            ProgressView().tint(BeSideColor.navyStart.opacity(0.45))
                         }
                     @unknown default:
                         mediaFallback
@@ -356,20 +363,24 @@ struct ConnectionView: View {
             }
         }
         .frame(width: size.width, height: size.height)
-        .background(Color(hex: 0x0A0A0A))
+        .background(Color(hex: 0xF7F4F8))
         .clipped()
     }
 
     private var mediaFallback: some View {
         LinearGradient(
-            colors: [Color(hex: 0x262626), Color(hex: 0x0A0A0A)],
+            colors: [
+                Color(hex: 0xFCE7F3),
+                Color(hex: 0xF3EEF6),
+                Color(hex: 0xEDE4F5),
+            ],
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
         .overlay {
             Text("Add photos or video")
                 .font(.system(size: 14, weight: .light))
-                .foregroundStyle(Color.white.opacity(0.35))
+                .foregroundStyle(BeSideColor.navyStart.opacity(0.35))
         }
     }
 
@@ -390,22 +401,6 @@ struct ConnectionView: View {
             withAnimation(.easeOut(duration: 0.28)) {
                 showPartnerQuiz = true
             }
-        }
-    }
-
-    private func openSection(_ slide: ConnectionCarouselSlide) {
-        if let index = slides.firstIndex(where: { $0.id == slide.id }) {
-            carouselIndex = index
-        }
-
-        withAnimation(.easeOut(duration: 0.28)) {
-            showSections = false
-            showTodaysActivity = slide.isTodaysActivity
-            showQuestionOfTheDay = slide.isQuestionOfTheDay
-            showPartnerQuiz = slide.isPartnerQuiz
-        }
-        if !slide.isTodaysActivity && !slide.isQuestionOfTheDay && !slide.isPartnerQuiz {
-            bumpAutoAdvance()
         }
     }
 

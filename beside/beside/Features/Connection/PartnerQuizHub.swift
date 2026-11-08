@@ -124,45 +124,33 @@ struct PartnerQuizHub: View {
             Spacer(minLength: 12)
 
             VStack(alignment: .leading, spacing: 22) {
-                Text("How to play")
+                Text("Think you know them?")
                     .font(.system(size: 28, weight: .semibold))
                     .foregroundStyle(ink.opacity(0.94))
 
-                Text("4 questions. Secret roles. Unexpected truths.")
-                    .font(.system(size: 18, weight: .medium))
-                    .foregroundStyle(ink.opacity(0.72))
-                    .lineSpacing(3)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Text("One answers honestly, the other guesses. Roles are on us!")
-                    .font(.system(size: 17, weight: .regular))
-                    .foregroundStyle(Color.black.opacity(0.52))
-                    .lineSpacing(3)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                VStack(alignment: .leading, spacing: 14) {
-                    rewardRow(
-                        systemImage: "heart.fill",
-                        tint: BeSideColor.raspberry.opacity(0.9),
-                        text: "+20 for your truth"
-                    )
-                    rewardRow(
-                        systemImage: "sparkles",
-                        tint: BeSideColor.navyStart.opacity(0.85),
-                        text: "+10 for every correct guess"
-                    )
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Text("4 quick questions.")
+                            .font(.system(size: 18, weight: .medium))
+                            .foregroundStyle(ink.opacity(0.72))
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(BeSideColor.loveNotePinkDeep)
+                    }
+                    Text("One of you answers for real — the other guesses.")
+                        .font(.system(size: 18, weight: .medium))
+                        .foregroundStyle(ink.opacity(0.72))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(.top, 4)
 
-                HStack(spacing: 8) {
-                    Text("Play all 4. Win the day together!")
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Roles are a surprise.")
+                        .font(.system(size: 17, weight: .regular))
+                        .foregroundStyle(Color.black.opacity(0.52))
+                    Text("So are the answers.")
                         .font(.system(size: 17, weight: .medium))
                         .foregroundStyle(ink.opacity(0.78))
-                    Image(systemName: "heart.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(BeSideColor.loveNotePinkDeep)
                 }
-                .padding(.top, 2)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(26)
@@ -186,7 +174,7 @@ struct PartnerQuizHub: View {
                     store.startPartnerQuiz()
                 }
             } label: {
-                Text("Play")
+                Text("Let's find out!")
                     .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(Color.white)
                     .frame(maxWidth: .infinity)
@@ -239,8 +227,11 @@ struct PartnerQuizHub: View {
                 }
                 .padding(.top, 6)
 
-                writeCustomQuestionButton
-                    .padding(.top, 4)
+                // Premium custom question is for the answering role only.
+                if store.partnerQuizRole == .answering {
+                    writeCustomQuestionButton
+                        .padding(.top, 4)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(26)
@@ -290,7 +281,7 @@ struct PartnerQuizHub: View {
                 showPremiumTeaser = true
             }
         } label: {
-            HStack(spacing: 14) {
+            HStack(alignment: .top, spacing: 14) {
                 ZStack {
                     Circle()
                         .fill(
@@ -309,13 +300,13 @@ struct PartnerQuizHub: View {
                         }
                         .shadow(color: BeSideColor.loveNotePinkDeep.opacity(0.28), radius: 8, y: 3)
 
-                    Image(systemName: hasCustom ? "checkmark" : "sparkles")
+                    Image(systemName: hasCustom ? "checkmark" : "text.bubble")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundStyle(BeSideColor.navyStart.opacity(0.88))
                 }
                 .frame(width: 40, height: 40)
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 6) {
                     Text(
                         hasCustom
                             ? "Edit your question"
@@ -323,47 +314,45 @@ struct PartnerQuizHub: View {
                     )
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(ink.opacity(0.9))
-                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
                     .fixedSize(horizontal: false, vertical: true)
 
                     Text(hasCustom ? "Saved · replaces one of today’s four" : "One personal slot in today’s quiz")
                         .font(.system(size: 12, weight: .regular))
                         .foregroundStyle(Color.black.opacity(0.42))
-                }
+                        .fixedSize(horizontal: false, vertical: true)
 
-                Spacer(minLength: 4)
-
-                HStack(spacing: 5) {
-                    Image(systemName: "sparkle")
-                        .font(.system(size: 10, weight: .semibold))
                     Text("Premium")
                         .font(.system(size: 11, weight: .semibold))
                         .tracking(0.2)
-                }
-                .foregroundStyle(BeSideColor.navyStart.opacity(0.82))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background {
-                    Capsule()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    Color.white.opacity(0.92),
-                                    BeSideColor.loveNotePink.opacity(0.65),
-                                ],
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .overlay {
-                            Capsule().stroke(Color.white.opacity(0.75), lineWidth: 0.8)
+                        .foregroundStyle(BeSideColor.navyStart.opacity(0.82))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background {
+                            Capsule()
+                                .fill(
+                                    LinearGradient(
+                                        colors: [
+                                            Color.white.opacity(0.92),
+                                            BeSideColor.loveNotePink.opacity(0.65),
+                                        ],
+                                        startPoint: .top,
+                                        endPoint: .bottom
+                                    )
+                                )
+                                .overlay {
+                                    Capsule().stroke(Color.white.opacity(0.75), lineWidth: 0.8)
+                                }
+                                .shadow(color: BeSideColor.loveNotePinkDeep.opacity(0.18), radius: 4, y: 1)
                         }
-                        .shadow(color: BeSideColor.loveNotePinkDeep.opacity(0.18), radius: 4, y: 1)
+                        .padding(.top, 2)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
 
                 Image(systemName: "chevron.right")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(ink.opacity(0.28))
+                    .padding(.top, 12)
             }
             .padding(.leading, 12)
             .padding(.trailing, 14)
@@ -755,22 +744,6 @@ struct PartnerQuizHub: View {
                         .shadow(color: ink.opacity(0.08), radius: 5, y: 3)
                 }
                 .accessibilityHidden(true)
-        }
-    }
-
-    private func rewardRow(systemImage: String, tint: Color, text: String) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: systemImage)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundStyle(tint)
-                .frame(width: 28, height: 28)
-                .background {
-                    Circle()
-                        .fill(tint.opacity(0.12))
-                }
-            Text(text)
-                .font(.system(size: 17, weight: .medium))
-                .foregroundStyle(ink.opacity(0.88))
         }
     }
 

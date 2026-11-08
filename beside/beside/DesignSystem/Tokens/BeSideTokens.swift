@@ -353,6 +353,239 @@ enum BeSideMetrics {
             )
         }
     }
+
+    /// Adaptive Us home (hero + stories + 2×2 tiles) for iPhone 16 / 16 Pro / Max.
+    struct UsLayout: Equatable {
+        var pageInset: CGFloat
+        var heroTitleSize: CGFloat
+        var heroSubtitleSize: CGFloat
+        var avatarSize: CGFloat
+        var storyRingSize: CGFloat
+        /// Tile width÷height — higher fits more of the 2×2 above the tab / nudge.
+        var tileAspect: CGFloat
+        var gridSpacing: CGFloat
+        var heroBottomGap: CGFloat
+        var storiesTopGap: CGFloat
+        var sectionBottomGap: CGFloat
+        var tabBarClearance: CGFloat
+        /// Approximate daily-strip height (for scroll bottom padding).
+        var nudgeHeight: CGFloat
+        // Tile internals
+        var tilePad: CGFloat
+        var tileLabelSize: CGFloat
+        var tileHeroSize: CGFloat
+        var tileBodySize: CGFloat
+        var tileCaptionSize: CGFloat
+        var tileActionSize: CGFloat
+        var tileBottomReserve: CGFloat
+        var momentsThumbScale: CGFloat
+        var warmthSize: CGFloat
+
+        static let standard = UsLayout(
+            pageInset: 34,
+            heroTitleSize: 22,
+            heroSubtitleSize: 14,
+            avatarSize: 58,
+            storyRingSize: 56,
+            tileAspect: 0.96,
+            gridSpacing: 16,
+            heroBottomGap: 12,
+            storiesTopGap: 12,
+            sectionBottomGap: 16,
+            tabBarClearance: 88,
+            nudgeHeight: 38,
+            tilePad: 12,
+            tileLabelSize: 11,
+            tileHeroSize: 30,
+            tileBodySize: 14,
+            tileCaptionSize: 12,
+            tileActionSize: 34,
+            tileBottomReserve: 36,
+            momentsThumbScale: 1,
+            warmthSize: 15
+        )
+
+        static func resolve(width: CGFloat, height: CGFloat, safeBottom: CGFloat) -> UsLayout {
+            let tabBarClearance = 64 + max(safeBottom, 8)
+            let nudgeHeight: CGFloat = 38
+            let pageInset: CGFloat = 34
+
+            // iPhone 16 (~852) — airy like Max, slightly tighter type only.
+            if height < 860 {
+                return UsLayout(
+                    pageInset: pageInset,
+                    heroTitleSize: 21,
+                    heroSubtitleSize: 14,
+                    avatarSize: 56,
+                    storyRingSize: 54,
+                    tileAspect: 0.98,
+                    gridSpacing: 16,
+                    heroBottomGap: 12,
+                    storiesTopGap: 12,
+                    sectionBottomGap: 16,
+                    tabBarClearance: tabBarClearance,
+                    nudgeHeight: nudgeHeight,
+                    tilePad: 12,
+                    tileLabelSize: 11,
+                    tileHeroSize: 28,
+                    tileBodySize: 14,
+                    tileCaptionSize: 12,
+                    tileActionSize: 32,
+                    tileBottomReserve: 34,
+                    momentsThumbScale: 0.96,
+                    warmthSize: 14
+                )
+            }
+            // iPhone 16 Pro (~874) — match Max breathing room.
+            if height < 920 {
+                return UsLayout(
+                    pageInset: pageInset,
+                    heroTitleSize: 22,
+                    heroSubtitleSize: 14,
+                    avatarSize: 58,
+                    storyRingSize: 56,
+                    tileAspect: 0.98,
+                    gridSpacing: 16,
+                    heroBottomGap: 12,
+                    storiesTopGap: 12,
+                    sectionBottomGap: 16,
+                    tabBarClearance: tabBarClearance,
+                    nudgeHeight: nudgeHeight,
+                    tilePad: 12,
+                    tileLabelSize: 11,
+                    tileHeroSize: 30,
+                    tileBodySize: 14,
+                    tileCaptionSize: 12,
+                    tileActionSize: 34,
+                    tileBottomReserve: 36,
+                    momentsThumbScale: 1,
+                    warmthSize: 15
+                )
+            }
+            return UsLayout(
+                pageInset: pageInset,
+                heroTitleSize: 22,
+                heroSubtitleSize: 14,
+                avatarSize: 58,
+                storyRingSize: 56,
+                tileAspect: 0.98,
+                gridSpacing: 16,
+                heroBottomGap: 12,
+                storiesTopGap: 12,
+                sectionBottomGap: 16,
+                tabBarClearance: tabBarClearance,
+                nudgeHeight: nudgeHeight,
+                tilePad: 12,
+                tileLabelSize: 11,
+                tileHeroSize: 30,
+                tileBodySize: 14,
+                tileCaptionSize: 12,
+                tileActionSize: 34,
+                tileBottomReserve: 36,
+                momentsThumbScale: 1,
+                warmthSize: 15
+            )
+        }
+    }
+
+    /// Adaptive Connection carousel (hero + 2×2 tiles) for iPhone 16 / Pro / Plus / Max.
+    struct ConnectionLayout: Equatable {
+        var pageInset: CGFloat
+        /// Share of content height (above tab clearance) for the media card.
+        var mediaFraction: CGFloat
+        var gap: CGFloat
+        var gridSpacing: CGFloat
+        var tileLabelSize: CGFloat
+        var titleSize: CGFloat
+        var bodySize: CGFloat
+        var copyPadding: CGFloat
+        var mediaBottomPad: CGFloat
+        var tabBarClearance: CGFloat
+
+        static let standard = ConnectionLayout(
+            pageInset: 18,
+            mediaFraction: 0.72,
+            gap: 10,
+            gridSpacing: 8,
+            tileLabelSize: 12,
+            titleSize: 24,
+            bodySize: 14,
+            copyPadding: 14,
+            mediaBottomPad: 16,
+            tabBarClearance: 88
+        )
+
+        /// - Parameters:
+        ///   - width: window width in points
+        ///   - height: window height in points
+        ///   - safeBottom: home-indicator inset
+        static func resolve(width: CGFloat, height: CGFloat, safeBottom: CGFloat) -> ConnectionLayout {
+            let tabBarClearance = 64 + max(safeBottom, 8)
+
+            // 16 ……… ~393×852
+            // 16 Pro … ~402×874
+            // Plus …… ~430×926
+            // Pro Max … ~440×956
+            if width <= 396 {
+                // iPhone 16
+                return ConnectionLayout(
+                    pageInset: 16,
+                    mediaFraction: 0.72,
+                    gap: 8,
+                    gridSpacing: 8,
+                    tileLabelSize: 11,
+                    titleSize: 23,
+                    bodySize: 14,
+                    copyPadding: 14,
+                    mediaBottomPad: 14,
+                    tabBarClearance: tabBarClearance
+                )
+            }
+            if width <= 415 {
+                // iPhone 16 Pro
+                return ConnectionLayout(
+                    pageInset: 18,
+                    mediaFraction: 0.73,
+                    gap: 10,
+                    gridSpacing: 8,
+                    tileLabelSize: 12,
+                    titleSize: 24,
+                    bodySize: 14,
+                    copyPadding: 15,
+                    mediaBottomPad: 16,
+                    tabBarClearance: tabBarClearance
+                )
+            }
+            if height < 940 {
+                // iPhone 16 Plus
+                return ConnectionLayout(
+                    pageInset: 22,
+                    mediaFraction: 0.73,
+                    gap: 10,
+                    gridSpacing: 10,
+                    tileLabelSize: 12,
+                    titleSize: 26,
+                    bodySize: 15,
+                    copyPadding: 16,
+                    mediaBottomPad: 18,
+                    tabBarClearance: tabBarClearance
+                )
+            }
+            // iPhone 16 Pro Max
+            return ConnectionLayout(
+                pageInset: 24,
+                mediaFraction: 0.74,
+                gap: 10,
+                gridSpacing: 10,
+                tileLabelSize: 13,
+                titleSize: 27,
+                bodySize: 15,
+                copyPadding: 16,
+                mediaBottomPad: 18,
+                tabBarClearance: tabBarClearance
+            )
+        }
+    }
 }
 
 extension Color {

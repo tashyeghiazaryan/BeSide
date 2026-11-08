@@ -148,6 +148,8 @@ final class MeSessionStore {
     var sharedMemories: [UsSharedMemory]
     /// Current Shared Moments photo for the home-screen widget (session-only JPEG).
     var sharedMomentPhotoJPEG: Data?
+    /// Couple stories strip on Us — shared list for both partners (session photo for v1).
+    var coupleStories: [UsCoupleStory]
     /// In-app notifications (session-only, seeded demos).
     var notifications: [UsNotification]
 
@@ -348,6 +350,7 @@ final class MeSessionStore {
         self.myWishlist = []
         self.wishlistHistory = []
         self.sharedMomentPhotoJPEG = nil
+        self.coupleStories = []
         self.meAvatarJPEG = AvatarDiskCache.load()
 
         if useSeeds {
@@ -447,6 +450,7 @@ final class MeSessionStore {
         loveNotes = []
         sharedMemories = []
         sharedMomentPhotoJPEG = nil
+        coupleStories = []
         notifications = []
         expandedPartnerDayKey = nil
         usLongTermLevel = 1
@@ -607,6 +611,31 @@ final class MeSessionStore {
     /// Set or clear the Shared Moments photo shown on the tile / widget preview (session-only).
     func setSharedMomentPhotoJPEG(_ data: Data?) {
         sharedMomentPhotoJPEG = data
+    }
+
+    /// Newest first — archive / full history (includes expired).
+    var coupleStoriesNewestFirst: [UsCoupleStory] {
+        coupleStories.sorted { $0.createdAt > $1.createdAt }
+    }
+
+    /// Active strip rings only — within 24 hours of `createdAt`.
+    var coupleStoriesLiveNewestFirst: [UsCoupleStory] {
+        coupleStoriesLive(at: Date())
+    }
+
+    func coupleStoriesLive(at now: Date) -> [UsCoupleStory] {
+        coupleStoriesNewestFirst.filter { $0.isLive(at: now) }
+    }
+
+    func addCoupleStory(imageJPEG: Data, author: UsCoupleStory.Author = .me) {
+        guard !imageJPEG.isEmpty else { return }
+        let story = UsCoupleStory(author: author, imageJPEG: imageJPEG, seenByMe: author == .me)
+        coupleStories.insert(story, at: 0)
+    }
+
+    func markCoupleStorySeen(id: String) {
+        guard let idx = coupleStories.firstIndex(where: { $0.id == id }) else { return }
+        coupleStories[idx].seenByMe = true
     }
 
     /// Add a Little Thing you ask of your partner (session-only for now).
